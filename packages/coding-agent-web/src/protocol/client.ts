@@ -21,10 +21,10 @@ export class ProtocolClient {
 		});
 	}
 
-	async listSessions(): Promise<SessionSummary[]> {
+	async listSessions(scope: "cwd" | "all" = "all"): Promise<SessionSummary[]> {
 		const response = await this.transport.request({
 			type: "list_sessions",
-			scope: "cwd",
+			scope,
 		});
 		if (!response.success) {
 			throw new Error(response.error ?? "list_sessions failed");

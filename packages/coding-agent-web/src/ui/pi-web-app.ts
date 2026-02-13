@@ -61,6 +61,11 @@ function groupTurns(messages: UiMessage[]): { orphans: UiMessage[]; turns: Turn[
 }
 
 /** Format a relative time string from an ISO date. */
+/** Shorten a path for display: replace home dir with ~ and keep it compact. */
+function shortenPath(cwd: string): string {
+	return cwd.replace(/^\/Users\/[^/]+/, "~").replace(/^\/home\/[^/]+/, "~");
+}
+
 function timeAgo(isoDate: string): string {
 	const diff = Date.now() - new Date(isoDate).getTime();
 	const minutes = Math.floor(diff / 60_000);
@@ -375,9 +380,17 @@ export class PiWebApp extends LitElement {
 			white-space: nowrap;
 		}
 
+		.session-item-cwd {
+			font-size: var(--font-size-xs);
+			color: var(--text-weak);
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+
 		.session-item-meta {
 			display: flex;
-			align-items: center;
+			align-items: center; 
 			gap: 8px;
 			font-size: var(--font-size-xs);
 			color: var(--text-weak);
@@ -991,21 +1004,41 @@ export class PiWebApp extends LitElement {
 		log("client initialized");
 	}
 
-	/** Called once when connection is established. Fetches initial session state. */
+	/** Called once when connection is established. Resumes the most recently modified session. */
 	private async onConnected(mockAutoPrompt?: string): Promise<void> {
 		if (!this.protocolClient) return;
 		try {
-			const [sessionState, sessions, messages] = await Promise.all([
+			const [sessionState, sessions] = await Promise.all([
 				this.protocolClient.getState(),
 				this.protocolClient.listSessions(),
-				this.protocolClient.getMessages(),
 			]);
-			this.store.setCurrentSessionId(sessionState.sessionId);
 			this.store.setSessions(sessions);
+
+			// Find the most recently modified session across all CWDs
+			const lastSession = sessions.length > 0 ? sessions[0] : undefined; // already sorted by modified desc
+			const needsSwitch = lastSession && lastSession.id !== sessionState.sessionId;
+
+			if (needsSwitch) {
+				log("resuming last session:", lastSession.id, lastSession.name ?? lastSession.firstMessage);
+				await this.protocolClient.switchSession(lastSession.path);
+				this.store.setCurrentSessionId(lastSession.id);
+			} else {
+				this.store.setCurrentSessionId(sessionState.sessionId);
+			}
+
+			// Load messages for the (possibly switched) session
+			const messages = await this.protocolClient.getMessages();
 			if (messages.length > 0) {
 				this.store.loadMessagesFromHistory(messages);
 			}
-			log("session state loaded", sessionState.sessionId, sessions.length, "sessions,", messages.length, "messages");
+			log(
+				"session state loaded",
+				this.appState.currentSessionId,
+				sessions.length,
+				"sessions,",
+				messages.length,
+				"messages",
+			);
 		} catch (err) {
 			log("failed to load session state:", err);
 		}
@@ -1252,9 +1285,11 @@ export class PiWebApp extends LitElement {
 	private renderSessionItem(session: SessionSummary, active: boolean) {
 		const displayName = session.name ?? session.firstMessage;
 		const truncated = displayName.length > 60 ? `${displayName.slice(0, 60)}...` : displayName;
+		const cwd = shortenPath(session.cwd);
 		return html`
 			<button class="session-item ${active ? "active" : ""}" @click=${() => void this.onSwitchSession(session)}>
 				<span class="session-item-name">${truncated}</span>
+				<span class="session-item-cwd">${cwd}</span>
 				<span class="session-item-meta">
 					<span>${session.messageCount} messages</span>
 					<span>${timeAgo(session.modified)}</span>

@@ -14,8 +14,9 @@ export class MockTransport implements Transport {
 	private statusListeners = new Set<StatusListener>();
 	private replayTimers: ReturnType<typeof setTimeout>[] = [];
 	private replayActive = false;
-	/** Tracks which mock session is "active" for switch_session. */
-	private activeSessionId = "session_1";
+	/** Tracks which mock session is "active" for switch_session.
+	 *  Starts as a "new" blank session so onConnected auto-resumes the latest one. */
+	private activeSessionId = "session_new";
 
 	constructor(scenario: Scenario, logger: { log: (...args: unknown[]) => void }) {
 		this.scenario = scenario;
@@ -133,14 +134,24 @@ export class MockTransport implements Transport {
 
 			case "switch_session": {
 				this.log("[mock] switch_session:", command.sessionPath);
-				this.activeSessionId = command.sessionPath.includes("session_2") ? "session_2" : "session_3";
+				const sessionNames: Record<string, string> = {
+					session_1: "Refactor auth module",
+					session_2: "Fix CI pipeline",
+				};
+				// Extract session id from path
+				for (const sid of ["session_1", "session_2", "session_3"]) {
+					if (command.sessionPath.includes(sid)) {
+						this.activeSessionId = sid;
+						break;
+					}
+				}
 				// Emit session_changed event
 				setTimeout(() => {
 					this.emitEvent({
 						type: "session_changed",
 						reason: "switch",
 						sessionId: this.activeSessionId,
-						sessionName: this.activeSessionId === "session_2" ? "Fix CI pipeline" : undefined,
+						sessionName: sessionNames[this.activeSessionId],
 					});
 				}, 50);
 				return { type: "response", id, command: "switch_session", success: true, data: { cancelled: false } };
@@ -266,6 +277,46 @@ const ASSISTANT_STUB = {
 };
 
 function getMockMessages(sessionId: string): unknown[] {
+	if (sessionId === "session_1") {
+		return [
+			{
+				role: "user",
+				content: "Help me refactor the authentication module to use JWT tokens",
+				timestamp: Date.now() - 3600_000,
+			},
+			{
+				role: "assistant",
+				content: [{ type: "toolCall", id: "tc_auth_1", name: "read", arguments: { path: "src/auth.ts" } }],
+				timestamp: Date.now() - 3599_000,
+				...ASSISTANT_STUB,
+			},
+			{
+				role: "toolResult",
+				toolCallId: "tc_auth_1",
+				toolName: "read",
+				content: [
+					{
+						type: "text",
+						text: "import bcrypt from 'bcrypt';\n\nexport function login(user: string, pass: string) {\n  // session-based auth\n  return createSession(user);\n}",
+					},
+				],
+				isError: false,
+				timestamp: Date.now() - 3598_000,
+			},
+			{
+				role: "assistant",
+				content: [
+					{
+						type: "text",
+						text: "I can see the current auth module uses session-based authentication. Here's my plan to refactor to JWT:\n\n1. Replace `createSession()` with `jwt.sign()` for token generation\n2. Add a `verifyToken()` middleware\n3. Add refresh token support\n\nShall I proceed with the refactor?",
+					},
+				],
+				timestamp: Date.now() - 3597_000,
+				...ASSISTANT_STUB,
+			},
+		];
+	}
+
 	if (sessionId === "session_2") {
 		return [
 			{
