@@ -1,27 +1,27 @@
-import type { WsClient } from "../transport/ws-client.js";
+import type { Transport } from "../transport/transport.js";
 import type { ExtensionUiResponse, RpcResponse } from "./types.js";
 
 export class ProtocolClient {
-	private readonly wsClient: WsClient;
+	private readonly transport: Transport;
 
-	constructor(wsClient: WsClient) {
-		this.wsClient = wsClient;
+	constructor(transport: Transport) {
+		this.transport = transport;
 	}
 
 	async prompt(message: string): Promise<RpcResponse> {
-		return this.wsClient.request({
+		return this.transport.request({
 			type: "prompt",
 			message,
 		});
 	}
 
 	async abort(): Promise<RpcResponse> {
-		return this.wsClient.request({
+		return this.transport.request({
 			type: "abort",
 		});
 	}
 
 	sendExtensionUiResponse(response: ExtensionUiResponse): void {
-		this.wsClient.sendExtensionUiResponse(response);
+		this.transport.sendExtensionUiResponse(response);
 	}
 }

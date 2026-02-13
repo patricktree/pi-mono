@@ -1,8 +1,11 @@
 import { css, html, LitElement } from "lit";
 import { customElement, query, state } from "lit/decorators.js";
+import { MockTransport } from "../mock/mock-transport.js";
+import { SCENARIOS } from "../mock/scenarios.js";
 import { ProtocolClient } from "../protocol/client.js";
 import type { ExtensionUiRequestEvent, ServerEvent } from "../protocol/types.js";
 import { type AppState, AppStore } from "../state/store.js";
+import type { Transport } from "../transport/transport.js";
 import { WsClient } from "../transport/ws-client.js";
 
 const LOG_PREFIX = "[pi-web]";
@@ -33,7 +36,7 @@ export class PiWebApp extends LitElement {
 	@query("#prompt") private promptEl?: HTMLTextAreaElement;
 
 	private readonly store = new AppStore();
-	private wsClient?: WsClient;
+	private transport?: Transport;
 	private protocolClient?: ProtocolClient;
 	private unsubscribeStore?: () => void;
 	private unsubscribeEvent?: () => void;
@@ -206,7 +209,7 @@ export class PiWebApp extends LitElement {
 		this.unsubscribeStore?.();
 		this.unsubscribeEvent?.();
 		this.unsubscribeStatus?.();
-		this.wsClient?.disconnect();
+		this.transport?.disconnect();
 	}
 
 	override updated(): void {
@@ -220,11 +223,26 @@ export class PiWebApp extends LitElement {
 	}
 
 	private initClient(): void {
-		const wsUrl = getWebSocketUrl();
-		this.wsClient = new WsClient(wsUrl, { log, warn, error });
-		this.protocolClient = new ProtocolClient(this.wsClient);
+		const params = new URLSearchParams(window.location.search);
+		const mockParam = params.get("mock");
+		let mockAutoPrompt: string | undefined;
 
-		this.unsubscribeEvent = this.wsClient.onEvent((event) => {
+		if (mockParam !== null) {
+			// Mock mode: use synthetic scenarios, no backend needed
+			const scenarioName = mockParam || "default";
+			const scenario = SCENARIOS[scenarioName] ?? SCENARIOS.default;
+			log(`mock mode (scenario: ${scenarioName})`);
+			this.transport = new MockTransport(scenario, { log });
+			mockAutoPrompt = scenario.autoPrompt;
+		} else {
+			// Real mode: connect to backend WebSocket
+			const wsUrl = getWebSocketUrl();
+			this.transport = new WsClient(wsUrl, { log, warn, error });
+		}
+
+		this.protocolClient = new ProtocolClient(this.transport);
+
+		this.unsubscribeEvent = this.transport.onEvent((event) => {
 			this.logIncomingEvent(event);
 			this.store.handleServerEvent(event);
 			if (event.type === "extension_ui_request") {
@@ -232,11 +250,16 @@ export class PiWebApp extends LitElement {
 			}
 		});
 
-		this.unsubscribeStatus = this.wsClient.onStatus((connected) => {
+		this.unsubscribeStatus = this.transport.onStatus((connected) => {
 			this.store.setConnected(connected);
+			// In mock mode, add the synthetic user message when connected
+			if (connected && mockAutoPrompt) {
+				this.store.addUserMessage(mockAutoPrompt);
+				mockAutoPrompt = undefined; // only once
+			}
 		});
 
-		this.wsClient.connect();
+		this.transport.connect();
 		this.initialized = true;
 		log("client initialized");
 	}

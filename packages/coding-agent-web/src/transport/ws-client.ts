@@ -1,7 +1,5 @@
 import type { ClientCommand, ExtensionUiResponse, RpcResponse, ServerEvent } from "../protocol/types.js";
-
-type EventListener = (event: ServerEvent) => void;
-type StatusListener = (connected: boolean) => void;
+import type { EventListener, StatusListener, Transport } from "./transport.js";
 
 type PendingRequest = {
 	resolve: (response: RpcResponse) => void;
@@ -11,7 +9,7 @@ type PendingRequest = {
 
 const REQUEST_TIMEOUT_MS = 30_000;
 
-export class WsClient {
+export class WsClient implements Transport {
 	private readonly wsUrl: string;
 	private readonly log: (...args: unknown[]) => void;
 	private readonly warn: (...args: unknown[]) => void;
