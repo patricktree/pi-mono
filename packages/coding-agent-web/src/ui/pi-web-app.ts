@@ -5,7 +5,7 @@ import { Marked } from "marked";
 import { MockTransport } from "../mock/mock-transport.js";
 import { SCENARIOS } from "../mock/scenarios.js";
 import { ProtocolClient } from "../protocol/client.js";
-import type { ExtensionUiRequestEvent, ServerEvent } from "../protocol/types.js";
+import type { ExtensionUiRequestEvent, ServerEvent, SessionSummary } from "../protocol/types.js";
 import { type AppState, AppStore, type ToolStepData, type UiMessage } from "../state/store.js";
 import type { Transport } from "../transport/transport.js";
 import { WsClient } from "../transport/ws-client.js";
@@ -60,6 +60,18 @@ function groupTurns(messages: UiMessage[]): { orphans: UiMessage[]; turns: Turn[
 	return { orphans, turns };
 }
 
+/** Format a relative time string from an ISO date. */
+function timeAgo(isoDate: string): string {
+	const diff = Date.now() - new Date(isoDate).getTime();
+	const minutes = Math.floor(diff / 60_000);
+	if (minutes < 1) return "just now";
+	if (minutes < 60) return `${minutes}m ago`;
+	const hours = Math.floor(minutes / 60);
+	if (hours < 24) return `${hours}h ago`;
+	const days = Math.floor(hours / 24);
+	return `${days}d ago`;
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -70,6 +82,9 @@ export class PiWebApp extends LitElement {
 		connected: false,
 		streaming: false,
 		messages: [],
+		sessions: [],
+		currentSessionId: null,
+		sidebarOpen: false,
 	};
 	@state() private prompt = "";
 	@state() private collapsedTurns = new Set<string>();
@@ -123,6 +138,8 @@ export class PiWebApp extends LitElement {
 			--radius-sm: 6px;
 			--radius-md: 8px;
 			--radius-lg: 10px;
+
+			--sidebar-width: 300px;
 
 			display: block;
 			height: 100%;
@@ -202,6 +219,168 @@ export class PiWebApp extends LitElement {
 
 		.status-dot.on {
 			background: var(--accent-green);
+		}
+
+		/* Hamburger button */
+		.btn-hamburger {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			width: 36px;
+			height: 36px;
+			border-radius: var(--radius-sm);
+			border: 1px solid var(--border-base);
+			background: var(--bg-surface);
+			color: var(--text-base);
+			cursor: pointer;
+			transition: background 0.1s;
+			flex-shrink: 0;
+		}
+
+		.btn-hamburger:hover {
+			background: var(--surface-raised);
+		}
+
+		.btn-hamburger svg {
+			width: 18px;
+			height: 18px;
+		}
+
+		/* ------------------------------------------------------------------ */
+		/* Sidebar overlay                                                     */
+		/* ------------------------------------------------------------------ */
+		.sidebar-backdrop {
+			position: fixed;
+			inset: 0;
+			background: rgba(0, 0, 0, 0.25);
+			z-index: 100;
+			opacity: 0;
+			pointer-events: none;
+			transition: opacity 0.2s ease;
+		}
+
+		.sidebar-backdrop.open {
+			opacity: 1;
+			pointer-events: auto;
+		}
+
+		.sidebar {
+			position: fixed;
+			top: 0;
+			left: 0;
+			bottom: 0;
+			width: var(--sidebar-width);
+			max-width: 85vw;
+			background: var(--bg-surface);
+			border-right: 1px solid var(--border-weak);
+			z-index: 101;
+			display: flex;
+			flex-direction: column;
+			transform: translateX(-100%);
+			transition: transform 0.2s ease;
+			overflow: hidden;
+		}
+
+		.sidebar.open {
+			transform: translateX(0);
+		}
+
+		.sidebar-header {
+			display: flex;
+			flex-direction: column;
+			gap: 4px;
+			padding: 16px 16px 12px;
+			border-bottom: 1px solid var(--border-weak);
+			flex-shrink: 0;
+		}
+
+		.sidebar-title {
+			font-size: var(--font-size-lg);
+			font-weight: 600;
+			color: var(--text-strong);
+		}
+
+		.sidebar-cwd {
+			font-size: var(--font-size-xs);
+			color: var(--text-weak);
+			font-family: var(--font-mono);
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+
+		.btn-new-session {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 6px;
+			margin: 12px 16px;
+			padding: 8px 16px;
+			border-radius: var(--radius-md);
+			border: 1px solid var(--border-base);
+			background: var(--bg-surface);
+			color: var(--text-strong);
+			font-family: var(--font-sans);
+			font-size: var(--font-size-sm);
+			font-weight: 500;
+			cursor: pointer;
+			transition: background 0.1s;
+			flex-shrink: 0;
+		}
+
+		.btn-new-session:hover {
+			background: var(--surface-raised);
+		}
+
+		.btn-new-session svg {
+			width: 14px;
+			height: 14px;
+		}
+
+		.session-list {
+			flex: 1;
+			min-height: 0;
+			overflow-y: auto;
+			padding: 4px 0;
+		}
+
+		.session-item {
+			display: flex;
+			flex-direction: column;
+			gap: 2px;
+			padding: 10px 16px;
+			cursor: pointer;
+			border: none;
+			background: none;
+			width: 100%;
+			text-align: left;
+			font-family: var(--font-sans);
+			transition: background 0.1s;
+		}
+
+		.session-item:hover {
+			background: var(--surface-raised);
+		}
+
+		.session-item.active {
+			background: var(--surface-raised);
+		}
+
+		.session-item-name {
+			font-size: var(--font-size-sm);
+			font-weight: 500;
+			color: var(--text-strong);
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+
+		.session-item-meta {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			font-size: var(--font-size-xs);
+			color: var(--text-weak);
 		}
 
 		/* ------------------------------------------------------------------ */
@@ -555,10 +734,10 @@ export class PiWebApp extends LitElement {
 		#prompt-dock::before {
 			content: "";
 			position: absolute;
-			top: -32px;
+			top: -24px;
 			left: 0;
 			right: 0;
-			height: 32px;
+			height: 24px;
 			background: linear-gradient(to bottom, transparent, var(--bg-stronger));
 			pointer-events: none;
 		}
@@ -795,18 +974,59 @@ export class PiWebApp extends LitElement {
 			if (event.type === "extension_ui_request") {
 				this.handleExtensionUiRequest(event);
 			}
+			if (event.type === "session_changed") {
+				void this.refreshSessionState();
+			}
 		});
 
 		this.unsubscribeStatus = this.transport.onStatus((connected) => {
 			this.store.setConnected(connected);
-			if (connected && mockAutoPrompt) {
-				this.store.addUserMessage(mockAutoPrompt);
+			if (connected) {
+				void this.onConnected(mockAutoPrompt);
 				mockAutoPrompt = undefined;
 			}
 		});
 
 		this.transport.connect();
 		log("client initialized");
+	}
+
+	/** Called once when connection is established. Fetches initial session state. */
+	private async onConnected(mockAutoPrompt?: string): Promise<void> {
+		if (!this.protocolClient) return;
+		try {
+			const [sessionState, sessions, messages] = await Promise.all([
+				this.protocolClient.getState(),
+				this.protocolClient.listSessions(),
+				this.protocolClient.getMessages(),
+			]);
+			this.store.setCurrentSessionId(sessionState.sessionId);
+			this.store.setSessions(sessions);
+			if (messages.length > 0) {
+				this.store.loadMessagesFromHistory(messages);
+			}
+			log("session state loaded", sessionState.sessionId, sessions.length, "sessions,", messages.length, "messages");
+		} catch (err) {
+			log("failed to load session state:", err);
+		}
+		if (mockAutoPrompt) {
+			this.store.addUserMessage(mockAutoPrompt);
+		}
+	}
+
+	/** Refresh session list and current session after session_changed events. */
+	private async refreshSessionState(): Promise<void> {
+		if (!this.protocolClient) return;
+		try {
+			const [sessionState, sessions] = await Promise.all([
+				this.protocolClient.getState(),
+				this.protocolClient.listSessions(),
+			]);
+			this.store.setCurrentSessionId(sessionState.sessionId);
+			this.store.setSessions(sessions);
+		} catch (err) {
+			log("failed to refresh session state:", err);
+		}
 	}
 
 	private logIncomingEvent(event: ServerEvent): void {
@@ -863,6 +1083,60 @@ export class PiWebApp extends LitElement {
 				return;
 		}
 	}
+
+	// ------------------------------------------------------------------
+	// Session actions
+	// ------------------------------------------------------------------
+
+	private openSidebar(): void {
+		this.store.setSidebarOpen(true);
+	}
+
+	private closeSidebar(): void {
+		this.store.setSidebarOpen(false);
+	}
+
+	private async onNewSession(): Promise<void> {
+		if (!this.protocolClient) return;
+		this.closeSidebar();
+		try {
+			await this.protocolClient.newSession();
+			this.store.clearMessages();
+			this.collapsedTurns = new Set();
+			await this.refreshSessionState();
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : String(err);
+			this.store.addErrorMessage(`Failed to create session: ${msg}`);
+		}
+	}
+
+	private async onSwitchSession(session: SessionSummary): Promise<void> {
+		if (!this.protocolClient) return;
+		if (session.id === this.appState.currentSessionId) {
+			this.closeSidebar();
+			return;
+		}
+		this.closeSidebar();
+		try {
+			await this.protocolClient.switchSession(session.path);
+			this.collapsedTurns = new Set();
+			await this.refreshSessionState();
+			// Load the switched session's message history
+			const messages = await this.protocolClient.getMessages();
+			if (messages.length > 0) {
+				this.store.loadMessagesFromHistory(messages);
+			} else {
+				this.store.clearMessages();
+			}
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : String(err);
+			this.store.addErrorMessage(`Failed to switch session: ${msg}`);
+		}
+	}
+
+	// ------------------------------------------------------------------
+	// Prompt actions
+	// ------------------------------------------------------------------
 
 	private async onSend(): Promise<void> {
 		if (!this.protocolClient) return;
@@ -923,14 +1197,19 @@ export class PiWebApp extends LitElement {
 	// ------------------------------------------------------------------
 
 	override render() {
-		const { connected, streaming, messages } = this.appState;
+		const { connected, streaming, messages, sidebarOpen, sessions, currentSessionId } = this.appState;
 		const { orphans, turns } = groupTurns(messages);
 		const hasContent = orphans.length > 0 || turns.length > 0;
 
 		return html`
+			${this.renderSidebar(sidebarOpen, sessions, currentSessionId)}
+
 			<div id="layout">
 				<header>
 					<div class="header-left">
+						<button class="btn-hamburger" @click=${this.openSidebar} aria-label="Open sidebar">
+							${svgMenu}
+						</button>
 						<h1>pi</h1>
 					</div>
 					<div class="status-pill">
@@ -949,6 +1228,38 @@ export class PiWebApp extends LitElement {
 
 				${this.renderPromptDock(connected, streaming)}
 			</div>
+		`;
+	}
+
+	private renderSidebar(open: boolean, sessions: SessionSummary[], currentSessionId: string | null) {
+		return html`
+			<div class="sidebar-backdrop ${open ? "open" : ""}" @click=${this.closeSidebar}></div>
+			<div class="sidebar ${open ? "open" : ""}">
+				<div class="sidebar-header">
+					<span class="sidebar-title">pi</span>
+				</div>
+				<button class="btn-new-session" @click=${() => void this.onNewSession()}>
+					${svgPlus} New session
+				</button>
+				<div class="session-list">
+					${sessions.map((s) => this.renderSessionItem(s, s.id === currentSessionId))}
+					${sessions.length === 0 ? html`<div style="padding: 16px; color: var(--text-weak); font-size: var(--font-size-sm);">No sessions yet</div>` : nothing}
+				</div>
+			</div>
+		`;
+	}
+
+	private renderSessionItem(session: SessionSummary, active: boolean) {
+		const displayName = session.name ?? session.firstMessage;
+		const truncated = displayName.length > 60 ? `${displayName.slice(0, 60)}...` : displayName;
+		return html`
+			<button class="session-item ${active ? "active" : ""}" @click=${() => void this.onSwitchSession(session)}>
+				<span class="session-item-name">${truncated}</span>
+				<span class="session-item-meta">
+					<span>${session.messageCount} messages</span>
+					<span>${timeAgo(session.modified)}</span>
+				</span>
+			</button>
 		`;
 	}
 
@@ -1116,6 +1427,10 @@ const svgX = html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 const svgSpinner = html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>`;
 
 const svgDots = html`<span style="letter-spacing:2px;font-size:10px;color:var(--text-weak)">···</span>`;
+
+const svgMenu = html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/></svg>`;
+
+const svgPlus = html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>`;
 
 // ---------------------------------------------------------------------------
 // Markdown rendering via `marked`

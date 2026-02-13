@@ -1,9 +1,12 @@
 import type {
+	AssistantContent,
 	ExtensionErrorEvent,
 	ExtensionUiRequestEvent,
+	HistoryMessage,
 	MessageUpdateEvent,
 	RpcResponse,
 	ServerEvent,
+	SessionSummary,
 	ToolExecutionEndEvent,
 	ToolExecutionStartEvent,
 } from "../protocol/types.js";
@@ -32,6 +35,12 @@ export interface AppState {
 	connected: boolean;
 	streaming: boolean;
 	messages: UiMessage[];
+	/** Available sessions, sorted by modified date (newest first). */
+	sessions: SessionSummary[];
+	/** Current session ID. */
+	currentSessionId: string | null;
+	/** Whether the sidebar is open. */
+	sidebarOpen: boolean;
 }
 
 let nextMessageId = 0;
@@ -64,6 +73,9 @@ export class AppStore {
 		connected: false,
 		streaming: false,
 		messages: [],
+		sessions: [],
+		currentSessionId: null,
+		sidebarOpen: false,
 	};
 
 	private listeners = new Set<(state: AppState) => void>();
@@ -99,6 +111,81 @@ export class AppStore {
 	addErrorMessage(text: string): void {
 		this.pushMessage("error", text);
 	}
+
+	// ------------------------------------------------------------------
+	// Session state
+	// ------------------------------------------------------------------
+
+	setSessions(sessions: SessionSummary[]): void {
+		const sorted = [...sessions].sort((a, b) => new Date(b.modified).getTime() - new Date(a.modified).getTime());
+		this.state = { ...this.state, sessions: sorted };
+		this.emit();
+	}
+
+	setCurrentSessionId(sessionId: string | null): void {
+		this.state = { ...this.state, currentSessionId: sessionId };
+		this.emit();
+	}
+
+	setSidebarOpen(open: boolean): void {
+		this.state = { ...this.state, sidebarOpen: open };
+		this.emit();
+	}
+
+	/** Clear messages (e.g. when switching sessions). */
+	clearMessages(): void {
+		this.state = { ...this.state, messages: [] };
+		this.activeTextMessageId = null;
+		this.activeThinkingMessageId = null;
+		this.activeToolStepId = null;
+		this.emit();
+	}
+
+	/** Convert server-side message history into UiMessages and replace current messages. */
+	loadMessagesFromHistory(history: HistoryMessage[]): void {
+		const uiMessages: UiMessage[] = [];
+		/** Map from toolCallId → tool step message, so toolResult can attach result. */
+		const toolStepMap = new Map<string, UiMessage>();
+
+		for (const msg of history) {
+			switch (msg.role) {
+				case "user": {
+					const text = typeof msg.content === "string" ? msg.content : msg.content.map((c) => c.text).join("");
+					uiMessages.push(createMessage("user", text));
+					break;
+				}
+				case "assistant": {
+					for (const part of msg.content) {
+						uiMessages.push(...convertAssistantPart(part, toolStepMap));
+					}
+					break;
+				}
+				case "toolResult": {
+					const resultText = msg.content.map((c) => c.text).join("");
+					const preview = resultText.length > 300 ? `${resultText.slice(0, 300)}...` : resultText;
+					const phase = msg.isError ? "error" : "done";
+
+					// Try to update the matching tool step in-place
+					const toolStep = toolStepMap.get(msg.toolCallId);
+					if (toolStep?.toolStep) {
+						toolStep.toolStep.phase = phase;
+						toolStep.toolStep.result = preview;
+					}
+					break;
+				}
+			}
+		}
+
+		this.state = { ...this.state, messages: uiMessages };
+		this.activeTextMessageId = null;
+		this.activeThinkingMessageId = null;
+		this.activeToolStepId = null;
+		this.emit();
+	}
+
+	// ------------------------------------------------------------------
+	// Server events
+	// ------------------------------------------------------------------
 
 	handleServerEvent(event: ServerEvent): void {
 		switch (event.type) {
@@ -153,7 +240,7 @@ export class AppStore {
 			}
 
 			case "session_changed": {
-				this.pushMessage("system", `Session changed (${event.reason})`);
+				// The UI component will handle refreshing session data
 				return;
 			}
 
@@ -315,6 +402,26 @@ export class AppStore {
 	private emit(): void {
 		for (const listener of this.listeners) {
 			listener(this.state);
+		}
+	}
+}
+
+function convertAssistantPart(part: AssistantContent, toolStepMap: Map<string, UiMessage>): UiMessage[] {
+	switch (part.type) {
+		case "text": {
+			if (!part.text.trim()) return [];
+			return [createMessage("assistant", part.text)];
+		}
+		case "thinking": {
+			if (!part.thinking.trim()) return [];
+			return [createMessage("thinking", part.thinking)];
+		}
+		case "toolCall": {
+			const args = JSON.stringify(part.arguments ?? {});
+			const argsPreview = args.length > 200 ? `${args.slice(0, 200)}...` : args;
+			const msg = createToolStepMessage(part.name, argsPreview);
+			toolStepMap.set(part.id, msg);
+			return [msg];
 		}
 	}
 }

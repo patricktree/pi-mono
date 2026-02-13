@@ -17,6 +17,12 @@ export interface ToolCallContent {
 
 export type AssistantContent = TextContent | ThinkingContent | ToolCallContent;
 
+export interface UserMessage {
+	role: "user";
+	content: string | TextContent[];
+	timestamp: number;
+}
+
 export interface AssistantMessage {
 	role: "assistant";
 	content: AssistantContent[];
@@ -31,6 +37,9 @@ export interface ToolResultMessage {
 	isError: boolean;
 	timestamp: number;
 }
+
+/** Union of message types returned by `get_messages`. */
+export type HistoryMessage = UserMessage | AssistantMessage | ToolResultMessage;
 
 export interface AssistantMessageEventTextDelta {
 	type: "text_delta";
@@ -114,6 +123,24 @@ export interface ToolExecutionEndEvent {
 export interface SessionChangedEvent {
 	type: "session_changed";
 	reason: "new" | "switch" | "fork" | "tree" | "reload";
+	sessionId: string;
+	sessionFile?: string;
+	sessionName?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Session types
+// ---------------------------------------------------------------------------
+
+export interface SessionSummary {
+	path: string;
+	id: string;
+	cwd: string;
+	name?: string;
+	created: string;
+	modified: string;
+	messageCount: number;
+	firstMessage: string;
 }
 
 export interface ExtensionUiRequestEvent {
@@ -162,7 +189,41 @@ export interface AbortCommand {
 	type: "abort";
 }
 
-export type ClientCommand = PromptCommand | AbortCommand;
+export interface ListSessionsCommand {
+	id?: string;
+	type: "list_sessions";
+	scope?: "cwd" | "all";
+}
+
+export interface SwitchSessionCommand {
+	id?: string;
+	type: "switch_session";
+	sessionPath: string;
+}
+
+export interface NewSessionCommand {
+	id?: string;
+	type: "new_session";
+}
+
+export interface GetStateCommand {
+	id?: string;
+	type: "get_state";
+}
+
+export interface GetMessagesCommand {
+	id?: string;
+	type: "get_messages";
+}
+
+export type ClientCommand =
+	| PromptCommand
+	| AbortCommand
+	| ListSessionsCommand
+	| SwitchSessionCommand
+	| NewSessionCommand
+	| GetStateCommand
+	| GetMessagesCommand;
 
 export type ExtensionUiResponse =
 	| { type: "extension_ui_response"; id: string; cancelled: true }
