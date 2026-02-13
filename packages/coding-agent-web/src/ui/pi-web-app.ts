@@ -61,6 +61,11 @@ function groupTurns(messages: UiMessage[]): { orphans: UiMessage[]; turns: Turn[
 }
 
 /** Format a relative time string from an ISO date. */
+/** Detect touch-primary devices (phones/tablets) where Enter should insert a newline. */
+function isTouchDevice(): boolean {
+	return "ontouchstart" in window || navigator.maxTouchPoints > 0;
+}
+
 /** Shorten a path for display: replace home dir with ~ and keep it compact. */
 function shortenPath(cwd: string): string {
 	return cwd.replace(/^\/Users\/[^/]+/, "~").replace(/^\/home\/[^/]+/, "~");
@@ -1209,7 +1214,9 @@ export class PiWebApp extends LitElement {
 	}
 
 	private onPromptKeyDown(event: KeyboardEvent): void {
-		if (event.key === "Enter" && !event.shiftKey) {
+		// On mobile/touch devices, let Enter insert a newline — users tap the send button instead.
+		// On desktop, Enter sends and Shift+Enter inserts a newline.
+		if (event.key === "Enter" && !event.shiftKey && !isTouchDevice()) {
 			event.preventDefault();
 			void this.onSend();
 		}
@@ -1414,6 +1421,7 @@ export class PiWebApp extends LitElement {
 					<textarea
 						id="prompt"
 						rows="1"
+						enterkeyhint="enter"
 						.value=${this.prompt}
 						?disabled=${streaming || !connected}
 						@input=${this.onPromptInput}
