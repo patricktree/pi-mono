@@ -5,7 +5,7 @@
  * Responses and events are emitted as JSON lines on stdout.
  */
 
-import type { AgentMessage, ThinkingLevel } from "@mariozechner/pi-agent-core";
+import type { AgentEvent, AgentMessage, ThinkingLevel } from "@mariozechner/pi-agent-core";
 import type { ImageContent, Model } from "@mariozechner/pi-ai";
 import type { SessionStats } from "../../core/agent-session.js";
 import type { BashResult } from "../../core/bash-executor.js";
@@ -64,7 +64,27 @@ export type RpcCommand =
 	| { id?: string; type: "get_messages" }
 
 	// Commands (available for invocation via prompt)
-	| { id?: string; type: "get_commands" };
+	| { id?: string; type: "get_commands" }
+
+	// Session tree & navigation
+	| { id?: string; type: "list_sessions"; scope?: "cwd" | "all"; sessionDir?: string }
+	| { id?: string; type: "get_session_tree" }
+	| {
+			id?: string;
+			type: "navigate_tree";
+			targetId: string;
+			summarize?: boolean;
+			customInstructions?: string;
+			replaceInstructions?: boolean;
+			label?: string;
+	  }
+	| { id?: string; type: "set_entry_label"; targetId: string; label?: string }
+
+	// Resources & tools
+	| { id?: string; type: "reload_resources" }
+	| { id?: string; type: "get_context_usage" }
+	| { id?: string; type: "get_tools" }
+	| { id?: string; type: "set_active_tools"; toolNames: string[] };
 
 // ============================================================================
 // RPC Slash Command (for get_commands response)
@@ -82,6 +102,57 @@ export interface RpcSlashCommand {
 	location?: "user" | "project" | "path";
 	/** File path to the command source */
 	path?: string;
+}
+
+// ============================================================================
+// Shared protocol structs
+// ============================================================================
+
+export interface RpcSessionSummary {
+	path: string;
+	id: string;
+	cwd: string;
+	name?: string;
+	parentSessionPath?: string;
+	created: string; // ISO string
+	modified: string; // ISO string
+	messageCount: number;
+	firstMessage: string;
+	allMessagesText: string;
+}
+
+export interface RpcSessionTreeEntry {
+	id: string;
+	parentId: string | null;
+	type: string;
+	timestamp: string;
+	label?: string;
+	preview?: string;
+}
+
+export interface RpcSessionTreeNode {
+	entry: RpcSessionTreeEntry;
+	children: RpcSessionTreeNode[];
+}
+
+export interface RpcSessionTree {
+	leafId: string | null;
+	nodes: RpcSessionTreeNode[];
+}
+
+export interface RpcContextUsage {
+	tokens: number;
+	contextWindow: number;
+	percent: number;
+	usageTokens: number;
+	trailingTokens: number;
+	lastUsageIndex: number | null;
+}
+
+export interface RpcToolInfo {
+	name: string;
+	description: string;
+	parameters: unknown;
 }
 
 // ============================================================================
@@ -201,6 +272,60 @@ export type RpcResponse =
 			data: { commands: RpcSlashCommand[] };
 	  }
 
+	// Session tree & navigation
+	| {
+			id?: string;
+			type: "response";
+			command: "list_sessions";
+			success: true;
+			data: { sessions: RpcSessionSummary[] };
+	  }
+	| {
+			id?: string;
+			type: "response";
+			command: "get_session_tree";
+			success: true;
+			data: RpcSessionTree;
+	  }
+	| {
+			id?: string;
+			type: "response";
+			command: "navigate_tree";
+			success: true;
+			data: { cancelled: boolean; editorText?: string };
+	  }
+	| { id?: string; type: "response"; command: "set_entry_label"; success: true }
+
+	// Resources & tools
+	| {
+			id?: string;
+			type: "response";
+			command: "reload_resources";
+			success: true;
+			data: { commands: RpcSlashCommand[] };
+	  }
+	| {
+			id?: string;
+			type: "response";
+			command: "get_context_usage";
+			success: true;
+			data: { usage?: RpcContextUsage };
+	  }
+	| {
+			id?: string;
+			type: "response";
+			command: "get_tools";
+			success: true;
+			data: { activeToolNames: string[]; allTools: RpcToolInfo[] };
+	  }
+	| {
+			id?: string;
+			type: "response";
+			command: "set_active_tools";
+			success: true;
+			data: { activeToolNames: string[] };
+	  }
+
 	// Error response (any command can fail)
 	| { id?: string; type: "response"; command: string; success: false; error: string };
 
@@ -255,6 +380,40 @@ export type RpcExtensionUIResponse =
 	| { type: "extension_ui_response"; id: string; value: string }
 	| { type: "extension_ui_response"; id: string; confirmed: boolean }
 	| { type: "extension_ui_response"; id: string; cancelled: true };
+
+// ============================================================================
+// Server-pushed events
+// ============================================================================
+
+export type RpcSessionChangedEvent = {
+	type: "session_changed";
+	reason: "new" | "switch" | "fork" | "tree" | "reload";
+	sessionId: string;
+	sessionFile?: string;
+	sessionName?: string;
+	messageCount: number;
+	leafId: string | null;
+};
+
+export type RpcQueueChangedEvent = {
+	type: "queue_changed";
+	pendingMessageCount: number;
+};
+
+export type RpcExtensionErrorEvent = {
+	type: "extension_error";
+	extensionPath: string;
+	event: string;
+	error: string;
+};
+
+/** Unified event type for all server-pushed events (agent events + protocol events) */
+export type RpcServerEvent =
+	| AgentEvent
+	| RpcExtensionUIRequest
+	| RpcSessionChangedEvent
+	| RpcQueueChangedEvent
+	| RpcExtensionErrorEvent;
 
 // ============================================================================
 // Helper type for extracting command types

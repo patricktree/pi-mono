@@ -19,6 +19,7 @@ import type {
 	ExtensionUIDialogOptions,
 	ExtensionWidgetOptions,
 } from "../../core/extensions/index.js";
+import { SessionManager } from "../../core/session-manager.js";
 import { type Theme, theme } from "../interactive/theme/theme.js";
 import type {
 	RpcCommand,
@@ -26,7 +27,12 @@ import type {
 	RpcExtensionUIResponse,
 	RpcResponse,
 	RpcSessionState,
+	RpcSessionSummary,
+	RpcSessionTree,
+	RpcSessionTreeEntry,
+	RpcSessionTreeNode,
 	RpcSlashCommand,
+	RpcToolInfo,
 } from "./rpc-types.js";
 
 // Re-export types for consumers
@@ -317,6 +323,123 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 		output(event);
 	});
 
+	// =====================================================================
+	// Helpers for new protocol commands
+	// =====================================================================
+
+	const getCommandsSnapshot = (): RpcSlashCommand[] => {
+		const commands: RpcSlashCommand[] = [];
+
+		for (const { command, extensionPath } of session.extensionRunner?.getRegisteredCommandsWithPaths() ?? []) {
+			commands.push({
+				name: command.name,
+				description: command.description,
+				source: "extension",
+				path: extensionPath,
+			});
+		}
+
+		for (const template of session.promptTemplates) {
+			commands.push({
+				name: template.name,
+				description: template.description,
+				source: "prompt",
+				location: template.source as RpcSlashCommand["location"],
+				path: template.filePath,
+			});
+		}
+
+		for (const skill of session.resourceLoader.getSkills().skills) {
+			commands.push({
+				name: `skill:${skill.name}`,
+				description: skill.description,
+				source: "skill",
+				location: skill.source as RpcSlashCommand["location"],
+				path: skill.filePath,
+			});
+		}
+
+		return commands;
+	};
+
+	const emitSessionChanged = (reason: "new" | "switch" | "fork" | "tree" | "reload") => {
+		output({
+			type: "session_changed",
+			reason,
+			sessionId: session.sessionId,
+			sessionFile: session.sessionFile,
+			sessionName: session.sessionName,
+			messageCount: session.messages.length,
+			leafId: session.sessionManager.getLeafId(),
+		});
+	};
+
+	const extractPreviewText = (entry: Record<string, unknown>): string | undefined => {
+		if (!entry || typeof entry !== "object") return undefined;
+
+		if (entry.type === "message") {
+			const msg = entry.message as Record<string, unknown> | undefined;
+			if (!msg) return undefined;
+
+			if (msg.role === "user") {
+				if (typeof msg.content === "string") return msg.content.slice(0, 140);
+				if (Array.isArray(msg.content)) {
+					const text = (msg.content as Array<Record<string, unknown>>)
+						.filter((c) => c?.type === "text" && typeof c.text === "string")
+						.map((c) => c.text as string)
+						.join(" ");
+					return text.slice(0, 140) || undefined;
+				}
+				return undefined;
+			}
+
+			if (msg.role === "assistant" && Array.isArray(msg.content)) {
+				const text = (msg.content as Array<Record<string, unknown>>)
+					.filter((c) => c?.type === "text" && typeof c.text === "string")
+					.map((c) => c.text as string)
+					.join(" ");
+				return text.slice(0, 140) || undefined;
+			}
+
+			if (msg.role === "toolResult") {
+				return `[toolResult:${msg.toolName as string}]`;
+			}
+		}
+
+		if (entry.type === "compaction") return "[compaction]";
+		if (entry.type === "branch_summary") return "[branch_summary]";
+		if (entry.type === "custom_message") return "[custom_message]";
+		if (entry.type === "custom") return "[custom]";
+		if (entry.type === "model_change") return `[model:${entry.provider as string}/${entry.modelId as string}]`;
+		if (entry.type === "thinking_level_change") return `[thinking:${entry.thinkingLevel as string}]`;
+		if (entry.type === "label") return `[label:${(entry.label as string) ?? ""}]`;
+		if (entry.type === "session_info") return `[session_info:${(entry.name as string) ?? ""}]`;
+
+		return undefined;
+	};
+
+	type TreeNodeLike = {
+		entry: { id: string; parentId: string | null; type: string; timestamp: string; [key: string]: unknown };
+		children: TreeNodeLike[];
+		label?: string;
+	};
+
+	const mapTreeNode = (node: TreeNodeLike): RpcSessionTreeNode => {
+		const entry: RpcSessionTreeEntry = {
+			id: node.entry.id,
+			parentId: node.entry.parentId,
+			type: node.entry.type,
+			timestamp: node.entry.timestamp,
+			label: node.label,
+			preview: extractPreviewText(node.entry as unknown as Record<string, unknown>),
+		};
+
+		return {
+			entry,
+			children: (node.children ?? []).map((child) => mapTreeNode(child)),
+		};
+	};
+
 	// Handle a single command
 	const handleCommand = async (command: RpcCommand): Promise<RpcResponse> => {
 		const id = command.id;
@@ -358,6 +481,9 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 			case "new_session": {
 				const options = command.parentSession ? { parentSession: command.parentSession } : undefined;
 				const cancelled = !(await session.newSession(options));
+				if (!cancelled) {
+					emitSessionChanged("new");
+				}
 				return success(id, "new_session", { cancelled });
 			}
 
@@ -499,11 +625,17 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 
 			case "switch_session": {
 				const cancelled = !(await session.switchSession(command.sessionPath));
+				if (!cancelled) {
+					emitSessionChanged("switch");
+				}
 				return success(id, "switch_session", { cancelled });
 			}
 
 			case "fork": {
 				const result = await session.fork(command.entryId);
+				if (!result.cancelled) {
+					emitSessionChanged("fork");
+				}
 				return success(id, "fork", { text: result.selectedText, cancelled: result.cancelled });
 			}
 
@@ -539,41 +671,99 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 			// =================================================================
 
 			case "get_commands": {
-				const commands: RpcSlashCommand[] = [];
+				return success(id, "get_commands", { commands: getCommandsSnapshot() });
+			}
 
-				// Extension commands
-				for (const { command, extensionPath } of session.extensionRunner?.getRegisteredCommandsWithPaths() ?? []) {
-					commands.push({
-						name: command.name,
-						description: command.description,
-						source: "extension",
-						path: extensionPath,
-					});
+			// =================================================================
+			// Session tree & navigation
+			// =================================================================
+
+			case "list_sessions": {
+				const scope = command.scope ?? "cwd";
+				const sessions =
+					scope === "all"
+						? await SessionManager.listAll()
+						: await SessionManager.list(session.sessionManager.getCwd(), command.sessionDir);
+
+				const data: RpcSessionSummary[] = sessions.map((s) => ({
+					path: s.path,
+					id: s.id,
+					cwd: s.cwd,
+					name: s.name,
+					parentSessionPath: s.parentSessionPath,
+					created: s.created.toISOString(),
+					modified: s.modified.toISOString(),
+					messageCount: s.messageCount,
+					firstMessage: s.firstMessage,
+					allMessagesText: s.allMessagesText,
+				}));
+
+				return success(id, "list_sessions", { sessions: data });
+			}
+
+			case "get_session_tree": {
+				const roots = session.sessionManager.getTree();
+				const tree: RpcSessionTree = {
+					leafId: session.sessionManager.getLeafId(),
+					nodes: roots.map((n) => mapTreeNode(n as unknown as TreeNodeLike)),
+				};
+				return success(id, "get_session_tree", tree);
+			}
+
+			case "navigate_tree": {
+				const result = await session.navigateTree(command.targetId, {
+					summarize: command.summarize,
+					customInstructions: command.customInstructions,
+					replaceInstructions: command.replaceInstructions,
+					label: command.label,
+				});
+
+				if (!result.cancelled) {
+					emitSessionChanged("tree");
 				}
 
-				// Prompt templates (source is always "user" | "project" | "path" in coding-agent)
-				for (const template of session.promptTemplates) {
-					commands.push({
-						name: template.name,
-						description: template.description,
-						source: "prompt",
-						location: template.source as RpcSlashCommand["location"],
-						path: template.filePath,
-					});
-				}
+				return success(id, "navigate_tree", {
+					cancelled: result.cancelled,
+					editorText: result.editorText,
+				});
+			}
 
-				// Skills (source is always "user" | "project" | "path" in coding-agent)
-				for (const skill of session.resourceLoader.getSkills().skills) {
-					commands.push({
-						name: `skill:${skill.name}`,
-						description: skill.description,
-						source: "skill",
-						location: skill.source as RpcSlashCommand["location"],
-						path: skill.filePath,
-					});
-				}
+			case "set_entry_label": {
+				const normalized = command.label?.trim();
+				session.sessionManager.appendLabelChange(command.targetId, normalized ? normalized : undefined);
+				return success(id, "set_entry_label");
+			}
 
-				return success(id, "get_commands", { commands });
+			// =================================================================
+			// Resources & tools
+			// =================================================================
+
+			case "reload_resources": {
+				await session.reload();
+				emitSessionChanged("reload");
+				return success(id, "reload_resources", { commands: getCommandsSnapshot() });
+			}
+
+			case "get_context_usage": {
+				const usage = session.getContextUsage();
+				return success(id, "get_context_usage", { usage });
+			}
+
+			case "get_tools": {
+				const activeToolNames = session.getActiveToolNames();
+				const allTools: RpcToolInfo[] = session.getAllTools().map((t) => ({
+					name: t.name,
+					description: t.description,
+					parameters: t.parameters,
+				}));
+				return success(id, "get_tools", { activeToolNames, allTools });
+			}
+
+			case "set_active_tools": {
+				session.setActiveToolsByName(command.toolNames);
+				return success(id, "set_active_tools", {
+					activeToolNames: session.getActiveToolNames(),
+				});
 			}
 
 			default: {

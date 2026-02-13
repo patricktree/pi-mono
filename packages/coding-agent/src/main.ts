@@ -29,7 +29,7 @@ import { SettingsManager } from "./core/settings-manager.js";
 import { printTimings, time } from "./core/timings.js";
 import { allTools } from "./core/tools/index.js";
 import { runMigrations, showDeprecationWarnings } from "./migrations.js";
-import { InteractiveMode, runPrintMode, runRpcMode } from "./modes/index.js";
+import { InteractiveMode, runPrintMode, runRpcMode, runWebMode } from "./modes/index.js";
 import { initTheme, stopThemeWatcher } from "./modes/interactive/theme/theme.js";
 
 /**
@@ -618,8 +618,8 @@ export async function main(args: string[]) {
 		process.exit(0);
 	}
 
-	// Read piped stdin content (if any) - skip for RPC mode which uses stdin for JSON-RPC
-	if (parsed.mode !== "rpc") {
+	// Read piped stdin content (if any) - skip for RPC/web modes which use stdin differently
+	if (parsed.mode !== "rpc" && parsed.mode !== "web") {
 		const stdinContent = await readPipedStdin();
 		if (stdinContent !== undefined) {
 			// Force print mode since interactive mode requires a TTY for keyboard input
@@ -643,8 +643,8 @@ export async function main(args: string[]) {
 		process.exit(0);
 	}
 
-	if (parsed.mode === "rpc" && parsed.fileArgs.length > 0) {
-		console.error(chalk.red("Error: @file arguments are not supported in RPC mode"));
+	if ((parsed.mode === "rpc" || parsed.mode === "web") && parsed.fileArgs.length > 0) {
+		console.error(chalk.red("Error: @file arguments are not supported in RPC/web mode"));
 		process.exit(1);
 	}
 
@@ -731,7 +731,15 @@ export async function main(args: string[]) {
 		}
 	}
 
-	if (mode === "rpc") {
+	if (mode === "web") {
+		await runWebMode(session, {
+			host: parsed.webHost ?? "127.0.0.1",
+			port: parsed.webPort ?? 4781,
+			open: parsed.webOpen ?? false,
+			token: parsed.webToken,
+			serveUiPath: parsed.serveUi,
+		});
+	} else if (mode === "rpc") {
 		await runRpcMode(session);
 	} else if (isInteractive) {
 		if (scopedModels.length > 0 && (parsed.verbose || !settingsManager.getQuietStartup())) {

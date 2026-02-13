@@ -6,12 +6,22 @@
 
 import { type ChildProcess, spawn } from "node:child_process";
 import * as readline from "node:readline";
-import type { AgentEvent, AgentMessage, ThinkingLevel } from "@mariozechner/pi-agent-core";
+import type { AgentMessage, ThinkingLevel } from "@mariozechner/pi-agent-core";
 import type { ImageContent } from "@mariozechner/pi-ai";
 import type { SessionStats } from "../../core/agent-session.js";
 import type { BashResult } from "../../core/bash-executor.js";
 import type { CompactionResult } from "../../core/compaction/index.js";
-import type { RpcCommand, RpcResponse, RpcSessionState, RpcSlashCommand } from "./rpc-types.js";
+import type {
+	RpcCommand,
+	RpcContextUsage,
+	RpcResponse,
+	RpcServerEvent,
+	RpcSessionState,
+	RpcSessionSummary,
+	RpcSessionTree,
+	RpcSlashCommand,
+	RpcToolInfo,
+} from "./rpc-types.js";
 
 // ============================================================================
 // Types
@@ -45,7 +55,7 @@ export interface ModelInfo {
 	reasoning: boolean;
 }
 
-export type RpcEventListener = (event: AgentEvent) => void;
+export type RpcEventListener = (event: RpcServerEvent) => void;
 
 // ============================================================================
 // RPC Client
@@ -386,6 +396,98 @@ export class RpcClient {
 	}
 
 	// =========================================================================
+	// Session tree & navigation
+	// =========================================================================
+
+	/**
+	 * List available sessions.
+	 * - scope: "cwd" (default) lists sessions for the current working directory
+	 * - scope: "all" lists sessions across all directories
+	 */
+	async listSessions(options?: { scope?: "cwd" | "all"; sessionDir?: string }): Promise<RpcSessionSummary[]> {
+		const response = await this.send({
+			type: "list_sessions",
+			scope: options?.scope,
+			sessionDir: options?.sessionDir,
+		});
+		return this.getData<{ sessions: RpcSessionSummary[] }>(response).sessions;
+	}
+
+	/**
+	 * Get the current session tree and active leaf.
+	 */
+	async getSessionTree(): Promise<RpcSessionTree> {
+		const response = await this.send({ type: "get_session_tree" });
+		return this.getData<RpcSessionTree>(response);
+	}
+
+	/**
+	 * Navigate to a different node in the session tree.
+	 */
+	async navigateTree(
+		targetId: string,
+		options?: {
+			summarize?: boolean;
+			customInstructions?: string;
+			replaceInstructions?: boolean;
+			label?: string;
+		},
+	): Promise<{ cancelled: boolean; editorText?: string }> {
+		const response = await this.send({
+			type: "navigate_tree",
+			targetId,
+			summarize: options?.summarize,
+			customInstructions: options?.customInstructions,
+			replaceInstructions: options?.replaceInstructions,
+			label: options?.label,
+		});
+		return this.getData<{ cancelled: boolean; editorText?: string }>(response);
+	}
+
+	/**
+	 * Set or clear label on a session entry.
+	 */
+	async setEntryLabel(targetId: string, label?: string): Promise<void> {
+		await this.send({ type: "set_entry_label", targetId, label });
+	}
+
+	// =========================================================================
+	// Resources & tools
+	// =========================================================================
+
+	/**
+	 * Reload extensions/resources and return refreshed slash command snapshot.
+	 */
+	async reloadResources(): Promise<RpcSlashCommand[]> {
+		const response = await this.send({ type: "reload_resources" });
+		return this.getData<{ commands: RpcSlashCommand[] }>(response).commands;
+	}
+
+	/**
+	 * Get current context window usage.
+	 */
+	async getContextUsage(): Promise<RpcContextUsage | undefined> {
+		const response = await this.send({ type: "get_context_usage" });
+		return this.getData<{ usage?: RpcContextUsage }>(response).usage;
+	}
+
+	/**
+	 * Get all available tools and currently active tool names.
+	 */
+	async getTools(): Promise<{ activeToolNames: string[]; allTools: RpcToolInfo[] }> {
+		const response = await this.send({ type: "get_tools" });
+		return this.getData<{ activeToolNames: string[]; allTools: RpcToolInfo[] }>(response);
+	}
+
+	/**
+	 * Set active tools and return resulting active tool names.
+	 */
+	async setActiveTools(toolNames: string[]): Promise<string[]> {
+		const response = await this.send({ type: "set_active_tools", toolNames });
+		return this.getData<{ activeToolNames: string[] }>(response).activeToolNames;
+	}
+
+	// =========================================================================
 	// Helpers
 	// =========================================================================
 
@@ -412,10 +514,11 @@ export class RpcClient {
 
 	/**
 	 * Collect events until agent becomes idle.
+	 * Only includes AgentEvent types (filters out protocol-level events).
 	 */
-	collectEvents(timeout = 60000): Promise<AgentEvent[]> {
+	collectEvents(timeout = 60000): Promise<RpcServerEvent[]> {
 		return new Promise((resolve, reject) => {
-			const events: AgentEvent[] = [];
+			const events: RpcServerEvent[] = [];
 			const timer = setTimeout(() => {
 				unsubscribe();
 				reject(new Error(`Timeout collecting events. Stderr: ${this.stderr}`));
@@ -435,7 +538,7 @@ export class RpcClient {
 	/**
 	 * Send prompt and wait for completion, returning all events.
 	 */
-	async promptAndWait(message: string, images?: ImageContent[], timeout = 60000): Promise<AgentEvent[]> {
+	async promptAndWait(message: string, images?: ImageContent[], timeout = 60000): Promise<RpcServerEvent[]> {
 		const eventsPromise = this.collectEvents(timeout);
 		await this.prompt(message, images);
 		return eventsPromise;
@@ -459,7 +562,7 @@ export class RpcClient {
 
 			// Otherwise it's an event
 			for (const listener of this.eventListeners) {
-				listener(data as AgentEvent);
+				listener(data as RpcServerEvent);
 			}
 		} catch {
 			// Ignore non-JSON lines

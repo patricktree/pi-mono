@@ -7,7 +7,7 @@ import chalk from "chalk";
 import { APP_NAME, CONFIG_DIR_NAME, ENV_AGENT_DIR } from "../config.js";
 import { allTools, type ToolName } from "../core/tools/index.js";
 
-export type Mode = "text" | "json" | "rpc";
+export type Mode = "text" | "json" | "rpc" | "web";
 
 export interface Args {
 	provider?: string;
@@ -39,6 +39,12 @@ export interface Args {
 	noThemes?: boolean;
 	listModels?: string | true;
 	verbose?: boolean;
+	// Web mode options
+	webHost?: string;
+	webPort?: number;
+	webOpen?: boolean;
+	webToken?: string;
+	serveUi?: string;
 	messages: string[];
 	fileArgs: string[];
 	/** Unknown flags (potentially extension flags) - map of flag name to value */
@@ -67,7 +73,7 @@ export function parseArgs(args: string[], extensionFlags?: Map<string, { type: "
 			result.version = true;
 		} else if (arg === "--mode" && i + 1 < args.length) {
 			const mode = args[++i];
-			if (mode === "text" || mode === "json" || mode === "rpc") {
+			if (mode === "text" || mode === "json" || mode === "rpc" || mode === "web") {
 				result.mode = mode;
 			}
 		} else if (arg === "--continue" || arg === "-c") {
@@ -151,6 +157,17 @@ export function parseArgs(args: string[], extensionFlags?: Map<string, { type: "
 			}
 		} else if (arg === "--verbose") {
 			result.verbose = true;
+		} else if (arg === "--host" && i + 1 < args.length) {
+			result.webHost = args[++i];
+		} else if (arg === "--port" && i + 1 < args.length) {
+			const p = Number.parseInt(args[++i], 10);
+			if (!Number.isNaN(p)) result.webPort = p;
+		} else if (arg === "--open") {
+			result.webOpen = true;
+		} else if (arg === "--web-token" && i + 1 < args.length) {
+			result.webToken = args[++i];
+		} else if (arg === "--serve-ui" && i + 1 < args.length) {
+			result.serveUi = args[++i];
 		} else if (arg.startsWith("@")) {
 			result.fileArgs.push(arg.slice(1)); // Remove @ prefix
 		} else if (arg.startsWith("--") && extensionFlags) {
@@ -193,7 +210,7 @@ ${chalk.bold("Options:")}
   --api-key <key>                API key (defaults to env vars)
   --system-prompt <text>         System prompt (default: coding assistant prompt)
   --append-system-prompt <text>  Append text or file contents to the system prompt
-  --mode <mode>                  Output mode: text (default), json, or rpc
+  --mode <mode>                  Output mode: text (default), json, rpc, or web
   --print, -p                    Non-interactive mode: process prompt and exit
   --continue, -c                 Continue previous session
   --resume, -r                   Select a session to resume
@@ -217,6 +234,11 @@ ${chalk.bold("Options:")}
   --export <file>                Export session file to HTML and exit
   --list-models [search]         List available models (with optional fuzzy search)
   --verbose                      Force verbose startup (overrides quietStartup setting)
+  --host <host>                  Web mode: bind address (default: 127.0.0.1)
+  --port <port>                  Web mode: listen port (default: 4781)
+  --open                         Web mode: open browser automatically
+  --web-token <token>            Web mode: require auth token for WebSocket
+  --serve-ui <path>              Web mode: serve custom static UI build
   --help, -h                     Show this help
   --version, -v                  Show version number
 
