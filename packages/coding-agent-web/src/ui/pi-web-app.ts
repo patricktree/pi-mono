@@ -6,7 +6,7 @@ import { MockTransport } from "../mock/mock-transport.js";
 import { SCENARIOS } from "../mock/scenarios.js";
 import { ProtocolClient } from "../protocol/client.js";
 import type { ExtensionUiRequestEvent, ServerEvent } from "../protocol/types.js";
-import { type AppState, AppStore, type UiMessage } from "../state/store.js";
+import { type AppState, AppStore, type ToolStepData, type UiMessage } from "../state/store.js";
 import type { Transport } from "../transport/transport.js";
 import { WsClient } from "../transport/ws-client.js";
 
@@ -209,6 +209,7 @@ export class PiWebApp extends LitElement {
 		/* ------------------------------------------------------------------ */
 		#scroller {
 			flex: 1;
+			min-height: 0;
 			overflow-y: auto;
 			overscroll-behavior: contain;
 		}
@@ -216,7 +217,7 @@ export class PiWebApp extends LitElement {
 		#content {
 			max-width: 800px;
 			margin: 0 auto;
-			padding: 24px 24px 180px 24px;
+			padding: 24px 24px 24px 24px;
 			display: flex;
 			flex-direction: column;
 			gap: 32px;
@@ -224,7 +225,7 @@ export class PiWebApp extends LitElement {
 
 		@media (max-width: 600px) {
 			#content {
-				padding: 16px 16px 180px 16px;
+				padding: 16px 16px 16px 16px;
 				gap: 24px;
 			}
 		}
@@ -313,15 +314,77 @@ export class PiWebApp extends LitElement {
 			font-style: italic;
 		}
 
-		.step-tool {
-			color: var(--text-base);
-			font-family: var(--font-mono);
-			font-size: var(--font-size-xs);
+		/* Tool step — single block per tool invocation, updates in place */
+		.tool-step {
+			display: flex;
+			flex-direction: column;
+			gap: 4px;
 		}
 
-		.step-tool .tool-label {
+		.tool-step-header {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			font-family: var(--font-mono);
+			font-size: var(--font-size-xs);
+			line-height: 1.5;
+		}
+
+		.tool-step-name {
 			color: var(--accent-orange);
 			font-weight: 500;
+		}
+
+		.tool-step-args {
+			color: var(--text-weak);
+			word-break: break-all;
+		}
+
+		.tool-step-status {
+			display: flex;
+			align-items: center;
+			gap: 5px;
+			font-size: var(--font-size-xs);
+			color: var(--text-weak);
+		}
+
+		.tool-step-status-icon {
+			display: inline-flex;
+			width: 14px;
+			height: 14px;
+			flex-shrink: 0;
+		}
+
+		.tool-step-status-icon.done {
+			color: var(--accent-green);
+		}
+
+		.tool-step-status-icon.error {
+			color: var(--accent-red);
+		}
+
+		.tool-step-status-icon.running {
+			color: var(--accent-blue);
+			animation: spin 1s linear infinite;
+		}
+
+		@keyframes spin {
+			to { transform: rotate(360deg); }
+		}
+
+		.tool-step-result {
+			font-family: var(--font-mono);
+			font-size: var(--font-size-xs);
+			color: var(--text-weak);
+			line-height: 1.5;
+			word-break: break-all;
+			max-height: 80px;
+			overflow: hidden;
+			position: relative;
+		}
+
+		.tool-step-result.is-error {
+			color: var(--accent-red);
 		}
 
 		.step-error {
@@ -934,7 +997,6 @@ export class PiWebApp extends LitElement {
 				${
 					assistantSteps.length > 0
 						? html`
-						<span class="response-label">Response</span>
 						${assistantSteps.map(
 							(msg) => html`
 							<div class="step step-assistant">${renderMd(msg.text)}${streaming && isLatestTurn ? html`<span class="streaming-dot"></span>` : nothing}</div>
@@ -960,7 +1022,7 @@ export class PiWebApp extends LitElement {
 			case "thinking":
 				return html`<div class="step step-thinking">${msg.text}</div>`;
 			case "tool":
-				return html`<div class="step step-tool"><span class="tool-label">${msg.text}</span></div>`;
+				return msg.toolStep ? this.renderToolStep(msg.toolStep) : html`<div class="step">${msg.text}</div>`;
 			case "error":
 				return html`<div class="step step-error">${msg.text}</div>`;
 			case "system":
@@ -969,6 +1031,33 @@ export class PiWebApp extends LitElement {
 				return html`<div class="step step-assistant">${renderMd(msg.text)}</div>`;
 			default:
 				return html`<div class="step">${msg.text}</div>`;
+		}
+	}
+
+	private renderToolStep(step: ToolStepData) {
+		return html`
+			<div class="step tool-step">
+				<div class="tool-step-header">
+					<span class="tool-step-name">${step.toolName}</span>
+					<span class="tool-step-args">${step.toolArgs}</span>
+				</div>
+				${this.renderToolStepStatus(step)}
+				${step.result && step.phase === "done" ? html`<div class="tool-step-result">${step.result}</div>` : nothing}
+				${step.result && step.phase === "error" ? html`<div class="tool-step-result is-error">${step.result}</div>` : nothing}
+			</div>
+		`;
+	}
+
+	private renderToolStepStatus(step: ToolStepData) {
+		switch (step.phase) {
+			case "calling":
+				return html`<div class="tool-step-status">${svgDots}<span>Calling...</span></div>`;
+			case "running":
+				return html`<div class="tool-step-status"><span class="tool-step-status-icon running">${svgSpinner}</span><span>Running...</span></div>`;
+			case "done":
+				return html`<div class="tool-step-status"><span class="tool-step-status-icon done">${svgCheck}</span><span>Done</span></div>`;
+			case "error":
+				return html`<div class="tool-step-status"><span class="tool-step-status-icon error">${svgX}</span><span>Error</span></div>`;
 		}
 	}
 
@@ -1019,6 +1108,14 @@ export class PiWebApp extends LitElement {
 const svgArrowUp = html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>`;
 
 const svgChevronDown = html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>`;
+
+const svgCheck = html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`;
+
+const svgX = html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>`;
+
+const svgSpinner = html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>`;
+
+const svgDots = html`<span style="letter-spacing:2px;font-size:10px;color:var(--text-weak)">···</span>`;
 
 // ---------------------------------------------------------------------------
 // Markdown rendering via `marked`

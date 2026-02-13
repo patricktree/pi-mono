@@ -10,10 +10,22 @@ import type {
 
 export type UiMessageKind = "user" | "assistant" | "thinking" | "tool" | "error" | "system";
 
+export type ToolStepPhase = "calling" | "running" | "done" | "error";
+
+export interface ToolStepData {
+	toolName: string;
+	toolArgs: string;
+	phase: ToolStepPhase;
+	/** Result preview text, set when phase is "done" or "error". */
+	result?: string;
+}
+
 export interface UiMessage {
 	id: string;
 	kind: UiMessageKind;
 	text: string;
+	/** Present only when kind === "tool". */
+	toolStep?: ToolStepData;
 }
 
 export interface AppState {
@@ -33,6 +45,20 @@ function createMessage(kind: UiMessageKind, text: string): UiMessage {
 	};
 }
 
+function createToolStepMessage(toolName: string, toolArgs: string): UiMessage {
+	nextMessageId += 1;
+	return {
+		id: `msg_${nextMessageId}`,
+		kind: "tool",
+		text: `${toolName}(${toolArgs})`,
+		toolStep: {
+			toolName,
+			toolArgs,
+			phase: "calling",
+		},
+	};
+}
+
 export class AppStore {
 	private state: AppState = {
 		connected: false,
@@ -43,6 +69,8 @@ export class AppStore {
 	private listeners = new Set<(state: AppState) => void>();
 	private activeTextMessageId: string | null = null;
 	private activeThinkingMessageId: string | null = null;
+	/** ID of the most recent tool step message (for in-place updates). */
+	private activeToolStepId: string | null = null;
 
 	subscribe(listener: (state: AppState) => void): () => void {
 		this.listeners.add(listener);
@@ -81,6 +109,7 @@ export class AppStore {
 				};
 				this.activeTextMessageId = null;
 				this.activeThinkingMessageId = null;
+				this.activeToolStepId = null;
 				this.emit();
 				return;
 			}
@@ -92,6 +121,7 @@ export class AppStore {
 				};
 				this.activeTextMessageId = null;
 				this.activeThinkingMessageId = null;
+				this.activeToolStepId = null;
 				this.emit();
 				return;
 			}
@@ -184,9 +214,15 @@ export class AppStore {
 			case "toolcall_end": {
 				const args = JSON.stringify(assistantEvent.toolCall.arguments ?? {});
 				const argsPreview = args.length > 200 ? `${args.slice(0, 200)}...` : args;
-				this.pushMessage("tool", `Tool call: ${assistantEvent.toolCall.name}(${argsPreview})`);
+				const msg = createToolStepMessage(assistantEvent.toolCall.name, argsPreview);
+				this.state = {
+					...this.state,
+					messages: [...this.state.messages, msg],
+				};
+				this.activeToolStepId = msg.id;
 				this.activeTextMessageId = null;
 				this.activeThinkingMessageId = null;
+				this.emit();
 				return;
 			}
 
@@ -195,15 +231,40 @@ export class AppStore {
 		}
 	}
 
-	private applyToolExecutionStart(event: ToolExecutionStartEvent): void {
+	private applyToolExecutionStart(_event: ToolExecutionStartEvent): void {
 		this.activeTextMessageId = null;
 		this.activeThinkingMessageId = null;
-		this.pushMessage("tool", `Running: ${event.toolName}`);
+
+		if (this.activeToolStepId) {
+			this.updateToolStepPhase(this.activeToolStepId, "running");
+		}
 	}
 
 	private applyToolExecutionEnd(event: ToolExecutionEndEvent): void {
-		const preview = toPreviewString(event.result, 300);
-		this.pushMessage(event.isError ? "error" : "tool", `${event.isError ? "Error" : "Result"}: ${preview}`);
+		if (this.activeToolStepId) {
+			const preview = toPreviewString(event.result, 300);
+			this.updateToolStepPhase(this.activeToolStepId, event.isError ? "error" : "done", preview);
+			this.activeToolStepId = null;
+		}
+	}
+
+	private updateToolStepPhase(messageId: string, phase: ToolStepPhase, result?: string): void {
+		this.state = {
+			...this.state,
+			messages: this.state.messages.map((msg) =>
+				msg.id === messageId && msg.toolStep
+					? {
+							...msg,
+							toolStep: {
+								...msg.toolStep,
+								phase,
+								result: result ?? msg.toolStep.result,
+							},
+						}
+					: msg,
+			),
+		};
+		this.emit();
 	}
 
 	private applyResponse(event: RpcResponse): void {
