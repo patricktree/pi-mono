@@ -64,6 +64,8 @@ const MIME_TYPES: Record<string, string> = {
 
 function getFallbackHtml(host: string, port: number, token?: string): string {
 	const wsUrl = `ws://${host === "0.0.0.0" ? "localhost" : host}:${port}/ws${token ? `?token=${token}` : ""}`;
+	const uiUrl = `http://${host === "0.0.0.0" ? "localhost" : host}:${port}${token ? `/?token=${encodeURIComponent(token)}` : ""}`;
+
 	return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -71,248 +73,70 @@ function getFallbackHtml(host: string, port: number, token?: string): string {
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>pi web mode</title>
 <style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  :root { --bg: #0d1117; --fg: #c9d1d9; --accent: #58a6ff; --border: #30363d;
-           --input-bg: #161b22; --msg-user: #1c2333; --msg-ai: #161b22;
-           --thinking: #8b949e; --tool: #f0883e; --error: #f85149; }
-  html, body { height: 100%; background: var(--bg); color: var(--fg);
-               font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-               font-size: 14px; line-height: 1.5; }
-  #app { display: flex; flex-direction: column; height: 100%; max-width: 900px; margin: 0 auto; padding: 0 16px; }
-  header { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); }
-  header h1 { font-size: 16px; font-weight: 600; }
-  #status { font-size: 12px; padding: 2px 8px; border-radius: 12px; }
-  .connected { background: #238636; color: #fff; }
-  .disconnected { background: var(--error); color: #fff; }
-  #messages { flex: 1; overflow-y: auto; padding: 16px 0; display: flex; flex-direction: column; gap: 12px; }
-  .msg { padding: 10px 14px; border-radius: 8px; white-space: pre-wrap; word-break: break-word; max-width: 100%; }
-  .msg-user { background: var(--msg-user); border: 1px solid var(--border); }
-  .msg-assistant { background: var(--msg-ai); }
-  .msg-thinking { color: var(--thinking); font-style: italic; font-size: 13px; }
-  .msg-tool { color: var(--tool); font-size: 13px; border-left: 3px solid var(--tool); padding-left: 12px; }
-  .msg-error { color: var(--error); }
-  .msg-system { color: var(--thinking); font-size: 12px; text-align: center; }
-  #input-area { display: flex; gap: 8px; padding: 12px 0; border-top: 1px solid var(--border); }
-  #prompt { flex: 1; background: var(--input-bg); color: var(--fg); border: 1px solid var(--border);
-            border-radius: 8px; padding: 10px 14px; font-size: 14px; font-family: inherit;
-            resize: none; min-height: 44px; max-height: 200px; outline: none; }
-  #prompt:focus { border-color: var(--accent); }
-  #prompt::placeholder { color: var(--thinking); }
-  button { background: var(--accent); color: #fff; border: none; border-radius: 8px;
-           padding: 10px 20px; font-size: 14px; cursor: pointer; font-weight: 500; }
-  button:hover { opacity: 0.9; }
-  button:disabled { opacity: 0.4; cursor: not-allowed; }
-  #abort-btn { background: var(--error); display: none; }
+  html, body {
+    height: 100%;
+    margin: 0;
+    background: #0d1117;
+    color: #c9d1d9;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  main {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 32px 20px;
+  }
+  h1 { margin: 0 0 8px; font-size: 22px; }
+  p { margin: 0 0 12px; line-height: 1.5; color: #8b949e; }
+  code {
+    display: block;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin: 6px 0 12px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  .ok { color: #3fb950; }
+  .warn { color: #f0883e; }
 </style>
 </head>
 <body>
-<div id="app">
-  <header>
-    <h1>pi</h1>
-    <span id="status" class="disconnected">disconnected</span>
-  </header>
-  <div id="messages"></div>
-  <div id="input-area">
-    <textarea id="prompt" placeholder="Type a message..." rows="1"></textarea>
-    <button id="send-btn">Send</button>
-    <button id="abort-btn">Abort</button>
-  </div>
-</div>
+<main>
+  <h1>pi web mode</h1>
+  <p>
+    No external web UI bundle is configured. The production frontend now lives in
+    <strong>packages/coding-agent-web</strong>.
+  </p>
+  <p>Build and serve it with:</p>
+  <code>npm run build --prefix packages/coding-agent-web
+pi --mode web --serve-ui packages/coding-agent-web/dist</code>
+  <p>Current WebSocket endpoint:</p>
+  <code>${wsUrl}</code>
+  <p>Current UI URL:</p>
+  <code>${uiUrl}</code>
+  <p id="status" class="warn">Checking WebSocket connectivity…</p>
+</main>
 <script>
 (function() {
-  var PREFIX = "[pi-web]";
-  function log()  { console.log.apply(console, [PREFIX].concat(Array.prototype.slice.call(arguments))); }
-  function warn() { console.warn.apply(console, [PREFIX].concat(Array.prototype.slice.call(arguments))); }
-  function err()  { console.error.apply(console, [PREFIX].concat(Array.prototype.slice.call(arguments))); }
-
-  var wsUrl = ${JSON.stringify(wsUrl)};
-  log("connecting to", wsUrl);
-
-  var ws = new WebSocket(wsUrl);
-  var msgs = document.getElementById("messages");
-  var prompt = document.getElementById("prompt");
-  var sendBtn = document.getElementById("send-btn");
-  var abortBtn = document.getElementById("abort-btn");
+  var ws = new WebSocket(${JSON.stringify(wsUrl)});
   var status = document.getElementById("status");
-  var streaming = false;
-  var currentEl = null;
-  var reqId = 0;
-  var msgCount = 0;
-
-  function addMsg(cls, text) {
-    var el = document.createElement("div");
-    el.className = "msg " + cls;
-    el.textContent = text;
-    msgs.appendChild(el);
-    msgs.scrollTop = msgs.scrollHeight;
-    return el;
-  }
-
-  function setStreaming(v) {
-    streaming = v;
-    log("streaming:", v);
-    sendBtn.style.display = v ? "none" : "";
-    abortBtn.style.display = v ? "" : "none";
-    prompt.disabled = v;
-  }
-
   ws.onopen = function() {
-    log("connected (readyState=" + ws.readyState + ", protocol=" + (ws.protocol || "none") + ")");
-    status.textContent = "connected";
-    status.className = "connected";
+    status.textContent = "WebSocket reachable";
+    status.className = "ok";
+    ws.close();
   };
-
-  ws.onclose = function(e) {
-    warn("disconnected code=" + e.code + " reason=" + (e.reason || "none") + " wasClean=" + e.wasClean);
-    status.textContent = "disconnected";
-    status.className = "disconnected";
+  ws.onerror = function() {
+    status.textContent = "WebSocket error";
+    status.className = "warn";
   };
-
-  ws.onerror = function(e) {
-    err("websocket error:", e);
-  };
-
-  // Track current UI elements for incremental rendering
-  var textEl = null;       // current assistant text bubble
-  var thinkingEl = null;   // current thinking bubble
-
-  ws.onmessage = function(e) {
-    msgCount++;
-    var data;
-    try { data = JSON.parse(e.data); } catch (ex) {
-      warn("recv #" + msgCount + " unparseable (" + e.data.length + " bytes):", ex.message);
-      return;
-    }
-    var t = data.type;
-    var size = e.data.length;
-
-    // --- Logging ---
-    if (t === "response") {
-      log("recv #" + msgCount + " response cmd=" + data.command + " id=" + data.id + " success=" + data.success + " (" + size + "b)");
-    } else if (t === "message_update") {
-      var evt = data.assistantMessageEvent;
-      log("recv #" + msgCount + " message_update/" + (evt ? evt.type : "?") + " (" + size + "b)");
-    } else if (t === "tool_execution_start" || t === "tool_execution_end") {
-      log("recv #" + msgCount + " " + t + " tool=" + data.toolName + " (" + size + "b)");
-    } else {
-      log("recv #" + msgCount + " " + t + " (" + size + "b)", data);
-    }
-
-    // --- Agent lifecycle ---
-    if (t === "agent_start") {
-      setStreaming(true);
-      textEl = null;
-      thinkingEl = null;
-    } else if (t === "agent_end") {
-      setStreaming(false);
-      textEl = null;
-      thinkingEl = null;
-
-    // --- Streaming assistant message updates ---
-    } else if (t === "message_update" && data.assistantMessageEvent) {
-      var evt = data.assistantMessageEvent;
-
-      if (evt.type === "text_delta") {
-        // Incremental text from the assistant
-        if (!textEl) {
-          thinkingEl = null; // end thinking bubble when text starts
-          textEl = addMsg("msg-assistant", "");
-        }
-        textEl.textContent += evt.delta;
-        msgs.scrollTop = msgs.scrollHeight;
-
-      } else if (evt.type === "thinking_delta") {
-        // Incremental thinking content
-        if (!thinkingEl) {
-          thinkingEl = addMsg("msg-thinking", "");
-        }
-        thinkingEl.textContent += evt.delta;
-        msgs.scrollTop = msgs.scrollHeight;
-
-      } else if (evt.type === "thinking_end") {
-        thinkingEl = null;
-
-      } else if (evt.type === "text_end") {
-        textEl = null;
-
-      } else if (evt.type === "toolcall_end" && evt.toolCall) {
-        textEl = null;
-        thinkingEl = null;
-        var inputStr = JSON.stringify(evt.toolCall.args || {});
-        if (inputStr.length > 200) inputStr = inputStr.slice(0, 200) + "...";
-        addMsg("msg-tool", "Tool call: " + evt.toolCall.name + "(" + inputStr + ")");
-      }
-
-    // --- Tool execution lifecycle ---
-    } else if (t === "tool_execution_start") {
-      textEl = null;
-      thinkingEl = null;
-      addMsg("msg-tool", "Running: " + data.toolName);
-
-    } else if (t === "tool_execution_end") {
-      var result = data.result;
-      var preview;
-      if (typeof result === "string") {
-        preview = result.length > 300 ? result.slice(0, 300) + "..." : result;
-      } else {
-        preview = JSON.stringify(result);
-        if (preview.length > 300) preview = preview.slice(0, 300) + "...";
-      }
-      var cls = data.isError ? "msg-error" : "msg-tool";
-      addMsg(cls, (data.isError ? "Error: " : "Result: ") + preview);
-
-    // --- Message lifecycle (non-streaming) ---
-    } else if (t === "message_end") {
-      textEl = null;
-      thinkingEl = null;
-
-    // --- Responses to commands ---
-    } else if (t === "response") {
-      if (!data.success) {
-        addMsg("msg-error", "Command error (" + data.command + "): " + (data.error || "unknown"));
-      }
-
-    // --- Session events ---
-    } else if (t === "session_changed") {
-      addMsg("msg-system", "Session changed (" + data.reason + ")");
-
-    // --- Extension UI ---
-    } else if (t === "extension_ui_request") {
-      log("extension UI request method=" + data.method + " id=" + data.requestId);
-
-    // --- Extension errors ---
-    } else if (t === "extension_error") {
-      addMsg("msg-error", "Extension error: " + (data.error || "unknown"));
+  ws.onclose = function(event) {
+    if (event.code !== 1000) {
+      status.textContent = "WebSocket closed (" + event.code + ")";
+      status.className = "warn";
     }
   };
-
-  function send() {
-    var text = prompt.value.trim();
-    if (!text || streaming) return;
-    var id = "req_" + (++reqId);
-    log("send prompt id=" + id + " (" + text.length + " chars)");
-    addMsg("msg-user", text);
-    ws.send(JSON.stringify({ id: id, type: "prompt", message: text }));
-    prompt.value = "";
-    prompt.style.height = "auto";
-  }
-
-  sendBtn.onclick = send;
-  abortBtn.onclick = function() {
-    var id = "req_" + (++reqId);
-    log("send abort id=" + id);
-    ws.send(JSON.stringify({ id: id, type: "abort" }));
-  };
-
-  prompt.addEventListener("keydown", function(e) {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
-  });
-  prompt.addEventListener("input", function() {
-    prompt.style.height = "auto";
-    prompt.style.height = Math.min(prompt.scrollHeight, 200) + "px";
-  });
-
-  log("client initialized, waiting for connection...");
 })();
 </script>
 </body>

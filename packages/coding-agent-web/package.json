@@ -1,0 +1,20 @@
+{
+  "name": "@mariozechner/pi-coding-agent-web",
+  "version": "0.52.9",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "biome check --write --error-on-warnings . && tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "lit": "^3.3.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "vite": "^7.1.6"
+  }
+}

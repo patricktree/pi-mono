@@ -404,6 +404,20 @@ pi --mode rpc
 
 See [docs/rpc.md](docs/rpc.md) for the protocol.
 
+### Web Mode
+
+For browser-based integrations, run:
+
+```bash
+pi --mode web
+```
+
+The dedicated frontend app lives in `packages/coding-agent-web`. Serve a built frontend with:
+
+```bash
+pi --mode web --serve-ui packages/coding-agent-web/dist
+```
+
 ---
 
 ## Philosophy
@@ -450,6 +464,7 @@ pi config                   # Enable/disable package resources
 | `-p`, `--print` | Print response and exit |
 | `--mode json` | Output all events as JSON lines (see [docs/json.md](docs/json.md)) |
 | `--mode rpc` | RPC mode for process integration (see [docs/rpc.md](docs/rpc.md)) |
+| `--mode web` | WebSocket + HTTP server mode for browser clients |
 | `--export <in> [out]` | Export session to HTML |
 
 ### Model Options
@@ -504,6 +519,11 @@ Combine `--no-*` with explicit flags to load exactly what you need, ignoring set
 | `--system-prompt <text>` | Replace default prompt (context files and skills still appended) |
 | `--append-system-prompt <text>` | Append to system prompt |
 | `--verbose` | Force verbose startup |
+| `--host <host>` | Web mode bind host (default: `127.0.0.1`) |
+| `--port <port>` | Web mode port (default: `4781`) |
+| `--open` | Web mode: open browser automatically |
+| `--web-token <token>` | Web mode: require token for WebSocket auth |
+| `--serve-ui <path>` | Web mode: serve static frontend build from path |
 | `-h`, `--help` | Show help |
 | `-v`, `--version` | Show version |
 

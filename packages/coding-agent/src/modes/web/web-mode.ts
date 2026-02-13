@@ -6,7 +6,10 @@
  */
 
 import { exec } from "node:child_process";
+import { existsSync } from "node:fs";
 import { platform } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { AgentSession } from "../../core/agent-session.js";
 import { createProtocolServerCore } from "../protocol/server-core.js";
 import type { RpcCommand, RpcExtensionUIResponse } from "../protocol/types.js";
@@ -37,7 +40,8 @@ export interface WebModeOptions {
  * Starts an HTTP server that serves a UI and a WebSocket endpoint for the protocol.
  */
 export async function runWebMode(session: AgentSession, options: WebModeOptions): Promise<never> {
-	const { host, port, open, token, serveUiPath } = options;
+	const { host, port, open, token, serveUiPath: explicitServeUiPath } = options;
+	const serveUiPath = resolveServeUiPath(explicitServeUiPath);
 
 	// Security warning for public binding
 	if (host === "0.0.0.0") {
@@ -113,10 +117,16 @@ export async function runWebMode(session: AgentSession, options: WebModeOptions)
 	const displayHost = host === "0.0.0.0" ? "localhost" : host;
 	const url = `http://${displayHost}:${boundPort}`;
 	const wsUrl = `ws://${displayHost}:${boundPort}/ws${token ? `?token=${token}` : ""}`;
+	const uiUrl = token ? `${url}/?token=${encodeURIComponent(token)}` : url;
 
 	console.log(`\x1b[1mpi web mode\x1b[0m`);
-	console.log(`  UI:        ${url}`);
+	console.log(`  UI:        ${uiUrl}`);
 	console.log(`  WebSocket: ${wsUrl}`);
+	if (serveUiPath) {
+		console.log(`  Static UI: ${serveUiPath}`);
+	} else {
+		console.log(`  Static UI: built-in fallback`);
+	}
 	if (token) {
 		console.log(`  Token:     ${token}`);
 	}
@@ -124,7 +134,7 @@ export async function runWebMode(session: AgentSession, options: WebModeOptions)
 
 	// Open browser if requested
 	if (open) {
-		openBrowser(url);
+		openBrowser(uiUrl);
 	}
 
 	// Keep process alive
@@ -134,6 +144,26 @@ export async function runWebMode(session: AgentSession, options: WebModeOptions)
 // ============================================================================
 // Helpers
 // ============================================================================
+
+function resolveServeUiPath(explicitPath?: string): string | undefined {
+	if (explicitPath) {
+		return explicitPath;
+	}
+
+	const currentDir = dirname(fileURLToPath(import.meta.url));
+	const candidates = [
+		resolve(currentDir, "../../../../coding-agent-web/dist"),
+		resolve(currentDir, "../../../web-ui"),
+	];
+
+	for (const candidate of candidates) {
+		if (existsSync(join(candidate, "index.html"))) {
+			return candidate;
+		}
+	}
+
+	return undefined;
+}
 
 function openBrowser(url: string): void {
 	const plat = platform();
