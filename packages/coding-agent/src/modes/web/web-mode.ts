@@ -27,6 +27,8 @@ export interface WebModeOptions {
 	open: boolean;
 	/** Optional auth token */
 	token?: string;
+	/** Extra allowed origins for WebSocket CORS (e.g. reverse proxy origins) */
+	allowedOrigins?: string[];
 	/** Path to custom static UI build directory */
 	serveUiPath?: string;
 }
@@ -40,7 +42,7 @@ export interface WebModeOptions {
  * Starts an HTTP server that serves a UI and a WebSocket endpoint for the protocol.
  */
 export async function runWebMode(session: AgentSession, options: WebModeOptions): Promise<never> {
-	const { host, port, open, token, serveUiPath: explicitServeUiPath } = options;
+	const { host, port, open, token, allowedOrigins: extraAllowedOrigins, serveUiPath: explicitServeUiPath } = options;
 	const serveUiPath = resolveServeUiPath(explicitServeUiPath);
 
 	// Security warning for public binding
@@ -55,6 +57,9 @@ export async function runWebMode(session: AgentSession, options: WebModeOptions)
 	const allowedOrigins: string[] = [];
 	if (host === "127.0.0.1" || host === "localhost") {
 		allowedOrigins.push(`http://${host}:${port}`, `http://localhost:${port}`, `http://127.0.0.1:${port}`);
+	}
+	if (extraAllowedOrigins) {
+		allowedOrigins.push(...extraAllowedOrigins);
 	}
 
 	const wsServer = createWebSocketServer({

@@ -44,6 +44,7 @@ export interface Args {
 	webPort?: number;
 	webOpen?: boolean;
 	webToken?: string;
+	webAllowedOrigins?: string[];
 	serveUi?: string;
 	messages: string[];
 	fileArgs: string[];
@@ -166,6 +167,9 @@ export function parseArgs(args: string[], extensionFlags?: Map<string, { type: "
 			result.webOpen = true;
 		} else if (arg === "--web-token" && i + 1 < args.length) {
 			result.webToken = args[++i];
+		} else if (arg === "--web-allowed-origin" && i + 1 < args.length) {
+			result.webAllowedOrigins = result.webAllowedOrigins ?? [];
+			result.webAllowedOrigins.push(args[++i]);
 		} else if (arg === "--serve-ui" && i + 1 < args.length) {
 			result.serveUi = args[++i];
 		} else if (arg.startsWith("@")) {
@@ -238,6 +242,7 @@ ${chalk.bold("Options:")}
   --port <port>                  Web mode: listen port (default: 4781)
   --open                         Web mode: open browser automatically
   --web-token <token>            Web mode: require auth token for WebSocket
+  --web-allowed-origin <origin>  Web mode: add allowed origin (can be used multiple times)
   --serve-ui <path>              Web mode: serve custom static UI build
   --help, -h                     Show this help
   --version, -v                  Show version number

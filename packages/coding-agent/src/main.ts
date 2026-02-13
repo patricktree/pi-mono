@@ -737,6 +737,7 @@ export async function main(args: string[]) {
 			port: parsed.webPort ?? 4781,
 			open: parsed.webOpen ?? false,
 			token: parsed.webToken,
+			allowedOrigins: parsed.webAllowedOrigins,
 			serveUiPath: parsed.serveUi,
 		});
 	} else if (mode === "rpc") {
