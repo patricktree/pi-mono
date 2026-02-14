@@ -12,6 +12,17 @@ interface AppState {
   sessions: SessionSummary[];  // Available sessions (sorted by modified date, newest first)
   currentSessionId: string | null;  // Active session ID
   sidebarOpen: boolean;        // Whether the session sidebar is open
+  contextUsage: ContextUsage | undefined;  // Context window usage (undefined until first fetch)
+}
+```
+
+### ContextUsage
+
+```typescript
+interface ContextUsage {
+  tokens: number;        // Tokens used so far
+  contextWindow: number; // Total context window size
+  percent: number;       // Usage percentage (0–100)
 }
 ```
 
@@ -93,6 +104,7 @@ The Lit component subscribes in `connectedCallback()` and assigns the state to a
 | `extension_ui_request` (notify)       | Add system message                                                      |
 | `extension_error`                     | Add error message                                                       |
 | `session_changed`                     | Handled by UI component (triggers session refresh)                      |
+| `agent_end`                           | Also triggers a context usage refresh via `get_context_usage`           |
 
 ### Streaming Text Assembly
 

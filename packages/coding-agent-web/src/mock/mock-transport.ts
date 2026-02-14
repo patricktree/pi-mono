@@ -199,6 +199,23 @@ export class MockTransport implements Transport {
 					data: { messages: getMockMessages(this.activeSessionId) },
 				};
 			}
+
+			case "get_context_usage": {
+				this.log("[mock] get_context_usage");
+				return {
+					type: "response",
+					id,
+					command: "get_context_usage",
+					success: true,
+					data: {
+						usage: {
+							tokens: 42_000,
+							contextWindow: 200_000,
+							percent: 21,
+						},
+					},
+				};
+			}
 		}
 	}
 

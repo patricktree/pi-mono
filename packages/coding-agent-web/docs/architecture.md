@@ -51,6 +51,7 @@ interface AppState {
   sessions: SessionSummary[];
   currentSessionId: string | null;
   sidebarOpen: boolean;
+  contextUsage: ContextUsage | undefined;
 }
 ```
 

@@ -141,6 +141,34 @@ Start a fresh session.
 {"id": "req_7", "type": "new_session"}
 ```
 
+### get_context_usage
+
+Get current context window usage. Returns how many tokens are used out of the model's context window.
+
+```json
+{"id": "req_8", "type": "get_context_usage"}
+```
+
+Response:
+
+```json
+{
+  "id": "req_8",
+  "type": "response",
+  "command": "get_context_usage",
+  "success": true,
+  "data": {
+    "usage": {
+      "tokens": 42000,
+      "contextWindow": 200000,
+      "percent": 21
+    }
+  }
+}
+```
+
+The `usage` field is `undefined` if no usage data is available yet (e.g., before the first prompt).
+
 ## Events (Server → Client)
 
 Events are broadcast to all connected WebSocket clients. They do not include an `id` field.

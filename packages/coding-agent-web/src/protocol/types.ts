@@ -129,6 +129,16 @@ export interface SessionChangedEvent {
 }
 
 // ---------------------------------------------------------------------------
+// Context usage
+// ---------------------------------------------------------------------------
+
+export interface ContextUsage {
+	tokens: number;
+	contextWindow: number;
+	percent: number;
+}
+
+// ---------------------------------------------------------------------------
 // Session types
 // ---------------------------------------------------------------------------
 
@@ -216,6 +226,11 @@ export interface GetMessagesCommand {
 	type: "get_messages";
 }
 
+export interface GetContextUsageCommand {
+	id?: string;
+	type: "get_context_usage";
+}
+
 export type ClientCommand =
 	| PromptCommand
 	| AbortCommand
@@ -223,7 +238,8 @@ export type ClientCommand =
 	| SwitchSessionCommand
 	| NewSessionCommand
 	| GetStateCommand
-	| GetMessagesCommand;
+	| GetMessagesCommand
+	| GetContextUsageCommand;
 
 export type ExtensionUiResponse =
 	| { type: "extension_ui_response"; id: string; cancelled: true }

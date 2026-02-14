@@ -95,6 +95,7 @@ export class PiWebApp extends LitElement {
 		sessions: [],
 		currentSessionId: null,
 		sidebarOpen: false,
+		contextUsage: undefined,
 	};
 	@state() private prompt = "";
 	@state() private collapsedTurns = new Set<string>();
@@ -879,6 +880,65 @@ export class PiWebApp extends LitElement {
 			height: 16px;
 		}
 
+		/* Context usage ring */
+		.context-ring {
+			position: relative;
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			width: 32px;
+			height: 32px;
+			cursor: default;
+		}
+
+		.context-ring svg {
+			width: 20px;
+			height: 20px;
+			transform: rotate(-90deg);
+		}
+
+		.context-ring-track {
+			fill: none;
+			stroke: var(--border-base);
+			stroke-width: 2;
+		}
+
+		.context-ring-fill {
+			fill: none;
+			stroke-width: 2;
+			stroke-linecap: round;
+			transition: stroke-dashoffset 0.4s ease, stroke 0.4s ease;
+		}
+
+		.context-ring-tooltip {
+			display: none;
+			position: absolute;
+			bottom: calc(100% + 6px);
+			right: -6px;
+			background: var(--text-strong);
+			color: var(--bg-surface);
+			font-size: 11px;
+			font-weight: 500;
+			white-space: nowrap;
+			padding: 4px 8px;
+			border-radius: 4px;
+			pointer-events: none;
+			z-index: 10;
+		}
+
+		.context-ring-tooltip::after {
+			content: "";
+			position: absolute;
+			top: 100%;
+			right: 18px;
+			border: 4px solid transparent;
+			border-top-color: var(--text-strong);
+		}
+
+		.context-ring:hover .context-ring-tooltip {
+			display: block;
+		}
+
 		.btn-abort {
 			display: inline-flex;
 			align-items: center;
@@ -995,6 +1055,9 @@ export class PiWebApp extends LitElement {
 			if (event.type === "session_changed") {
 				void this.refreshSessionState();
 			}
+			if (event.type === "agent_end") {
+				void this.refreshContextUsage();
+			}
 		});
 
 		this.unsubscribeStatus = this.transport.onStatus((connected) => {
@@ -1044,11 +1107,23 @@ export class PiWebApp extends LitElement {
 				messages.length,
 				"messages",
 			);
+			void this.refreshContextUsage();
 		} catch (err) {
 			log("failed to load session state:", err);
 		}
 		if (mockAutoPrompt) {
 			this.store.addUserMessage(mockAutoPrompt);
+		}
+	}
+
+	/** Fetch context usage from the server and update the store. */
+	private async refreshContextUsage(): Promise<void> {
+		if (!this.protocolClient) return;
+		try {
+			const usage = await this.protocolClient.getContextUsage();
+			this.store.setContextUsage(usage);
+		} catch (err) {
+			log("failed to fetch context usage:", err);
 		}
 	}
 
@@ -1432,6 +1507,7 @@ export class PiWebApp extends LitElement {
 							<!-- placeholder for model selector / mode badge -->
 						</div>
 						<div class="prompt-actions">
+							${this.renderContextRing()}
 							${
 								streaming
 									? html`<button class="btn-abort" id="abort-btn" @click=${this.onAbort}>Stop</button>`
@@ -1450,6 +1526,45 @@ export class PiWebApp extends LitElement {
 						</div>
 					</div>
 				</div>
+			</div>
+		`;
+	}
+
+	private renderContextRing() {
+		const usage = this.appState.contextUsage;
+		if (!usage) return nothing;
+
+		const percent = Math.round(Math.min(100, Math.max(0, usage.percent)));
+		// SVG circle math: radius 8, circumference ≈ 50.27
+		const radius = 8;
+		const circumference = 2 * Math.PI * radius;
+		const offset = circumference - (percent / 100) * circumference;
+
+		// Neutral color, shifts to warning/danger at high usage
+		let strokeColor = "var(--text-weak)";
+		if (percent >= 80) {
+			strokeColor = "var(--accent-red)";
+		} else if (percent >= 50) {
+			strokeColor = "var(--accent-orange)";
+		}
+
+		const tokensK = Math.round(usage.tokens / 1000);
+		const windowK = Math.round(usage.contextWindow / 1000);
+		const tooltip = `${tokensK}k / ${windowK}k tokens (${percent}%)`;
+
+		return html`
+			<div class="context-ring" aria-label=${tooltip}>
+				<svg viewBox="0 0 20 20">
+					<circle class="context-ring-track" cx="10" cy="10" r=${radius} />
+					<circle
+						class="context-ring-fill"
+						cx="10" cy="10" r=${radius}
+						stroke=${strokeColor}
+						stroke-dasharray=${circumference}
+						stroke-dashoffset=${offset}
+					/>
+				</svg>
+				<span class="context-ring-tooltip">${tooltip}</span>
 			</div>
 		`;
 	}

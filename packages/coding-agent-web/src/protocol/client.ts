@@ -1,5 +1,5 @@
 import type { Transport } from "../transport/transport.js";
-import type { ExtensionUiResponse, HistoryMessage, RpcResponse, SessionSummary } from "./types.js";
+import type { ContextUsage, ExtensionUiResponse, HistoryMessage, RpcResponse, SessionSummary } from "./types.js";
 
 export class ProtocolClient {
 	private readonly transport: Transport;
@@ -72,6 +72,17 @@ export class ProtocolClient {
 		}
 		const data = response.data as { sessionId: string; sessionName?: string };
 		return data;
+	}
+
+	async getContextUsage(): Promise<ContextUsage | undefined> {
+		const response = await this.transport.request({
+			type: "get_context_usage",
+		});
+		if (!response.success) {
+			throw new Error(response.error ?? "get_context_usage failed");
+		}
+		const data = response.data as { usage?: ContextUsage };
+		return data.usage;
 	}
 
 	sendExtensionUiResponse(response: ExtensionUiResponse): void {

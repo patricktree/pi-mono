@@ -23,7 +23,7 @@ The entire frontend is a single Lit web component (`<pi-web-app>`) defined in `s
 ├─────────────────────────────────────────┤
 │ ┌─────────────────────────────────────┐ │
 │ │ Type a message...                   │ │  ← Prompt input
-│ │                              [Send] │ │
+│ │                          ◔  [Send] │ │  ← Context ring + send button
 │ └─────────────────────────────────────┘ │  ← Prompt dock (sticky bottom)
 └─────────────────────────────────────────┘
 ```
@@ -92,6 +92,15 @@ Assistant messages are rendered as HTML via [marked](https://github.com/markedjs
 - Tables
 
 Code blocks use the `IBM Plex Mono` font. No syntax highlighting is applied.
+
+## Context Usage Indicator
+
+A small circular progress ring in the prompt toolbar shows how much of the model's context window has been consumed. It appears to the left of the Send button once usage data is available.
+
+- **Color**: Grey by default, shifts to orange at ≥50% usage and red at ≥80%
+- **Tooltip**: Hovering reveals a tooltip with the exact token count and percentage (e.g., "42k / 200k tokens (21%)")
+- **Refresh**: The indicator is fetched on initial connect and after every agent turn completes (`agent_end` event)
+- **Hidden**: The ring is hidden until the first `get_context_usage` response arrives
 
 ## Prompt Input
 

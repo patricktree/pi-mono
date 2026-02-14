@@ -1,5 +1,6 @@
 import type {
 	AssistantContent,
+	ContextUsage,
 	ExtensionErrorEvent,
 	ExtensionUiRequestEvent,
 	HistoryMessage,
@@ -41,6 +42,8 @@ export interface AppState {
 	currentSessionId: string | null;
 	/** Whether the sidebar is open. */
 	sidebarOpen: boolean;
+	/** Context window usage, undefined until first fetch. */
+	contextUsage: ContextUsage | undefined;
 }
 
 let nextMessageId = 0;
@@ -76,6 +79,7 @@ export class AppStore {
 		sessions: [],
 		currentSessionId: null,
 		sidebarOpen: false,
+		contextUsage: undefined,
 	};
 
 	private listeners = new Set<(state: AppState) => void>();
@@ -129,6 +133,11 @@ export class AppStore {
 
 	setSidebarOpen(open: boolean): void {
 		this.state = { ...this.state, sidebarOpen: open };
+		this.emit();
+	}
+
+	setContextUsage(usage: ContextUsage | undefined): void {
+		this.state = { ...this.state, contextUsage: usage };
 		this.emit();
 	}
 
