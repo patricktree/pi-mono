@@ -94,13 +94,12 @@ AppStore ◄──── handleServerEvent() ◄───────┘
 
 ## Backend Integration
 
-The web frontend connects to the coding-agent's web mode server (`pi --mode web`). See [`coding-agent/docs/web-mode.md`](../../coding-agent/docs/web-mode.md) for full documentation of the server-side components, including the HTTP server, WebSocket transport, authentication, origin checking, and extension UI bridge.
+The web frontend connects to the coding-agent's web mode server (`pi --mode web`). The backend uses the `AgentSession` SDK directly — incoming WebSocket commands are mapped to session method calls without an intermediate protocol abstraction layer. See [`coding-agent/docs/web-mode.md`](../../coding-agent/docs/web-mode.md) for full documentation of the server-side components, including the HTTP server, WebSocket transport, authentication, origin checking, and extension UI bridge.
 
 Key source files in `packages/coding-agent/src/modes/web/`:
 
-- [`web-mode.ts`](../../coding-agent/src/modes/web/web-mode.ts) — Entry point, wires WebSocket to the shared protocol server core
+- [`web-mode.ts`](../../coding-agent/src/modes/web/web-mode.ts) — Entry point, command handling via direct `AgentSession` SDK calls, event forwarding
 - [`http-server.ts`](../../coding-agent/src/modes/web/http-server.ts) — HTTP server, serves static files from this package's `dist/` directory
 - [`ws-transport.ts`](../../coding-agent/src/modes/web/ws-transport.ts) — WebSocket server with token auth and origin allowlist
-- [`../protocol/server-core.ts`](../../coding-agent/src/modes/protocol/server-core.ts) — Shared command dispatcher (same as RPC mode)
 
 The backend auto-discovers this package's `dist/` directory relative to its own installation path. Use `--serve-ui <path>` to override.

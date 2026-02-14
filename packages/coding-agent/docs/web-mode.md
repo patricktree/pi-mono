@@ -1,15 +1,14 @@
 # Web Mode
 
-Web mode starts an HTTP + WebSocket server for browser-based agent interaction. It reuses the shared protocol server core (same command handling as RPC mode) but transports over WebSocket instead of stdio.
+Web mode starts an HTTP + WebSocket server for browser-based agent interaction. It uses the `AgentSession` SDK directly — incoming WebSocket commands are mapped to session method calls, and session events are broadcast to all connected clients.
 
 The browser frontend lives in a separate package: [`@mariozechner/pi-coding-agent-web`](../../coding-agent-web/).
 
 **Source files:**
 
-- [`src/modes/web/web-mode.ts`](../src/modes/web/web-mode.ts) — Entry point and orchestration
+- [`src/modes/web/web-mode.ts`](../src/modes/web/web-mode.ts) — Entry point, command handling, and orchestration
 - [`src/modes/web/http-server.ts`](../src/modes/web/http-server.ts) — HTTP server and static file serving
 - [`src/modes/web/ws-transport.ts`](../src/modes/web/ws-transport.ts) — WebSocket server with auth and origin checks
-- [`src/modes/protocol/server-core.ts`](../src/modes/protocol/server-core.ts) — Shared command dispatcher (same as RPC mode)
 - [`src/modes/protocol/extension-ui-bridge.ts`](../src/modes/protocol/extension-ui-bridge.ts) — Extension UI request/response bridge
 
 ## Starting Web Mode
@@ -37,19 +36,18 @@ Browser (coding-agent-web)
     │
     └── WebSocket /ws?token=... ─── ws-transport.ts
                                         │
-                                    web-mode.ts (message routing)
+                                    web-mode.ts (command handler)
                                         │
                                 ┌───────┴───────┐
                                 │               │
-                        extension_ui_response   RpcCommand
+                        extension_ui_response   command JSON
                                 │               │
-                    extension-ui-bridge.ts   server-core.ts
-                                                │
-                                          AgentSession
+                    extension-ui-bridge.ts   AgentSession SDK
+                                            (direct method calls)
                                                 │
                                         (agent loop, tools, LLM)
                                                 │
-                                          server-core.ts (event subscription)
+                                    session.subscribe() → broadcast
                                                 │
                                           ws-transport.ts (broadcast)
                                                 │
@@ -138,18 +136,30 @@ All WebSocket activity is logged to stderr with timestamps:
 - Each broadcast with event type, recipient count, and byte count
 - Errors, pings, and rejected connections
 
-## Protocol Server Core
+## Command Handling
 
-The shared `ProtocolServerCore` handles command dispatch. It is reused by both RPC mode (stdio) and web mode (WebSocket). See [rpc.md](rpc.md) for the full list of commands and events.
+`web-mode.ts` contains a `handleCommand()` function that maps incoming JSON commands directly to `AgentSession` SDK method calls. There is no shared protocol abstraction layer — each command type is handled inline with a direct session method call (e.g., `session.prompt()`, `session.abort()`, `session.newSession()`).
 
-### Message Routing in Web Mode
+The full list of supported commands matches the RPC protocol. See [rpc.md](rpc.md) for command and event documentation.
+
+### Message Routing
 
 `web-mode.ts` routes incoming WebSocket messages:
 
 1. If `type === "extension_ui_response"` → forwarded to the extension UI bridge
-2. Otherwise → treated as an `RpcCommand` and dispatched to `core.handleCommand()`
+2. Otherwise → treated as a command and dispatched to `handleCommand()`
 
-Command responses are sent back to the requesting client only. Agent events are broadcast to all clients via the `output` callback wired to `wsServer.broadcast()`.
+Command responses are sent back to the requesting client only. Session events are broadcast to all clients via `session.subscribe()` wired to `wsServer.broadcast()`.
+
+### Event Forwarding
+
+All `AgentSession` events are forwarded to connected clients via a single subscription:
+
+```typescript
+session.subscribe((event) => wsServer.broadcast(event));
+```
+
+This includes `agent_start`, `agent_end`, `message_update`, `message_end`, `tool_execution_start`, `tool_execution_end`, `turn_start`, `turn_end`, and all other session events. The web frontend uses the subset it needs and ignores the rest.
 
 ### Shutdown
 
