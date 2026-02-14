@@ -5,7 +5,7 @@ import { Marked } from "marked";
 import { MockTransport } from "../mock/mock-transport.js";
 import { SCENARIOS } from "../mock/scenarios.js";
 import { ProtocolClient } from "../protocol/client.js";
-import type { ExtensionUiRequestEvent, ServerEvent, SessionSummary } from "../protocol/types.js";
+import type { ExtensionUiRequestEvent, ImageContent, ServerEvent, SessionSummary } from "../protocol/types.js";
 import { type AppState, AppStore, type ToolStepData, type UiMessage } from "../state/store.js";
 import type { Transport } from "../transport/transport.js";
 import { WsClient } from "../transport/ws-client.js";
@@ -99,9 +99,11 @@ export class PiWebApp extends LitElement {
 	};
 	@state() private prompt = "";
 	@state() private collapsedTurns = new Set<string>();
+	@state() private pendingImages: ImageContent[] = [];
 
 	@query("#scroller") private scrollerEl?: HTMLDivElement;
 	@query("#prompt") private promptEl?: HTMLTextAreaElement;
+	@query("#file-input") private fileInputEl?: HTMLInputElement;
 
 	private readonly store = new AppStore();
 	private transport?: Transport;
@@ -984,6 +986,88 @@ export class PiWebApp extends LitElement {
 			color: var(--text-weak);
 		}
 
+		/* ------------------------------------------------------------------ */
+		/* Image previews in prompt                                            */
+		/* ------------------------------------------------------------------ */
+		.pending-images {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 6px;
+			padding: 8px 12px 0;
+		}
+
+		.pending-image {
+			position: relative;
+			width: 56px;
+			height: 56px;
+			border-radius: var(--radius-sm);
+			overflow: hidden;
+			border: 1px solid var(--border-base);
+			flex-shrink: 0;
+		}
+
+		.pending-image img {
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+			display: block;
+		}
+
+		.pending-image-remove {
+			position: absolute;
+			top: 2px;
+			right: 2px;
+			width: 18px;
+			height: 18px;
+			border-radius: 50%;
+			border: none;
+			background: rgba(0, 0, 0, 0.55);
+			color: #fff;
+			font-size: 12px;
+			line-height: 1;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			cursor: pointer;
+			padding: 0;
+		}
+
+		.pending-image-remove:hover {
+			background: rgba(0, 0, 0, 0.75);
+		}
+
+		/* Hidden file input */
+		#file-input {
+			display: none;
+		}
+
+		/* ------------------------------------------------------------------ */
+		/* Image thumbnails in user messages                                   */
+		/* ------------------------------------------------------------------ */
+		.user-msg-images {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 6px;
+			margin-top: 8px;
+		}
+
+		.user-msg-image {
+			width: 80px;
+			height: 80px;
+			border-radius: var(--radius-sm);
+			overflow: hidden;
+			border: 1px solid var(--border-base);
+			cursor: pointer;
+			flex-shrink: 0;
+		}
+
+		.user-msg-image img {
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+			display: block;
+		}
+
 		/* Streaming indicator */
 		.streaming-dot {
 			display: inline-block;
@@ -1248,20 +1332,62 @@ export class PiWebApp extends LitElement {
 	}
 
 	// ------------------------------------------------------------------
+	// Image attachment
+	// ------------------------------------------------------------------
+
+	private onAttachImage(): void {
+		this.fileInputEl?.click();
+	}
+
+	private async onFileSelected(event: Event): Promise<void> {
+		const input = event.currentTarget as HTMLInputElement;
+		const files = input.files;
+		if (!files || files.length === 0) return;
+
+		for (const file of files) {
+			if (!file.type.startsWith("image/")) {
+				warn("skipping non-image file:", file.name, file.type);
+				continue;
+			}
+			// 20 MB limit per file
+			if (file.size > 20 * 1024 * 1024) {
+				this.store.addErrorMessage(`Image too large (max 20 MB): ${file.name}`);
+				continue;
+			}
+			try {
+				const base64 = await readFileAsBase64(file);
+				this.pendingImages = [...this.pendingImages, { type: "image", data: base64, mimeType: file.type }];
+			} catch (err) {
+				const msg = err instanceof Error ? err.message : String(err);
+				this.store.addErrorMessage(`Failed to read image: ${msg}`);
+			}
+		}
+
+		// Reset the input so the same file can be re-selected
+		input.value = "";
+	}
+
+	private removePendingImage(index: number): void {
+		this.pendingImages = this.pendingImages.filter((_, i) => i !== index);
+	}
+
+	// ------------------------------------------------------------------
 	// Prompt actions
 	// ------------------------------------------------------------------
 
 	private async onSend(): Promise<void> {
 		if (!this.protocolClient) return;
 		const message = this.prompt.trim();
-		if (!message || this.appState.streaming || !this.appState.connected) return;
+		const images = this.pendingImages.length > 0 ? [...this.pendingImages] : undefined;
+		if ((!message && !images) || this.appState.streaming || !this.appState.connected) return;
 
-		this.store.addUserMessage(message);
-		log(`send prompt (${message.length} chars)`);
+		this.store.addUserMessage(message || "(image attachment)", images);
+		log(`send prompt (${message.length} chars, ${images?.length ?? 0} images)`);
 		this.prompt = "";
+		this.pendingImages = [];
 
 		try {
-			const response = await this.protocolClient.prompt(message);
+			const response = await this.protocolClient.prompt(message, images);
 			if (!response.success) {
 				this.store.addErrorMessage(`Command error (${response.command}): ${response.error || "unknown error"}`);
 			}
@@ -1402,7 +1528,10 @@ export class PiWebApp extends LitElement {
 
 		return html`
 			<div class="turn">
-				<div class="user-msg">${turn.user.text}</div>
+				<div class="user-msg">
+					${turn.user.text}
+					${turn.user.images && turn.user.images.length > 0 ? this.renderUserImages(turn.user.images) : nothing}
+				</div>
 
 				${
 					showSteps
@@ -1489,14 +1618,38 @@ export class PiWebApp extends LitElement {
 		}
 	}
 
+	private renderUserImages(images: ImageContent[]) {
+		return html`
+			<div class="user-msg-images">
+				${images.map(
+					(img) => html`
+					<div class="user-msg-image">
+						<img src="data:${img.mimeType};base64,${img.data}" alt="attached image" />
+					</div>
+				`,
+				)}
+			</div>
+		`;
+	}
+
 	private renderPromptDock(connected: boolean, streaming: boolean) {
+		const hasContent = this.prompt.trim() || this.pendingImages.length > 0;
 		return html`
 			<div id="prompt-dock">
 				<div class="prompt-card">
+					<input
+						id="file-input"
+						type="file"
+						accept="image/*"
+						multiple
+						@change=${this.onFileSelected}
+					/>
+					${this.pendingImages.length > 0 ? this.renderPendingImages() : nothing}
 					<textarea
 						id="prompt"
 						rows="1"
 						enterkeyhint="enter"
+						placeholder="Ask anything..."
 						.value=${this.prompt}
 						?disabled=${streaming || !connected}
 						@input=${this.onPromptInput}
@@ -1508,6 +1661,16 @@ export class PiWebApp extends LitElement {
 						</div>
 						<div class="prompt-actions">
 							${this.renderContextRing()}
+							<button
+								class="btn-icon"
+								id="attach-btn"
+								@click=${this.onAttachImage}
+								?disabled=${streaming || !connected}
+								aria-label="Attach image"
+								title="Attach image"
+							>
+								${svgImage}
+							</button>
 							${
 								streaming
 									? html`<button class="btn-abort" id="abort-btn" @click=${this.onAbort}>Stop</button>`
@@ -1515,7 +1678,7 @@ export class PiWebApp extends LitElement {
 									<button
 										class="btn-send"
 										id="send-btn"
-										?disabled=${!connected || !this.prompt.trim()}
+										?disabled=${!connected || !hasContent}
 										@click=${this.onSend}
 										aria-label="Send"
 									>
@@ -1526,6 +1689,21 @@ export class PiWebApp extends LitElement {
 						</div>
 					</div>
 				</div>
+			</div>
+		`;
+	}
+
+	private renderPendingImages() {
+		return html`
+			<div class="pending-images">
+				${this.pendingImages.map(
+					(img, i) => html`
+					<div class="pending-image">
+						<img src="data:${img.mimeType};base64,${img.data}" alt="pending attachment" />
+						<button class="pending-image-remove" @click=${() => this.removePendingImage(i)} aria-label="Remove image">&times;</button>
+					</div>
+				`,
+				)}
 			</div>
 		`;
 	}
@@ -1589,6 +1767,30 @@ const svgDots = html`<span style="letter-spacing:2px;font-size:10px;color:var(--
 const svgMenu = html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/></svg>`;
 
 const svgPlus = html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>`;
+
+const svgImage = html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>`;
+
+// ---------------------------------------------------------------------------
+// File reading helper
+// ---------------------------------------------------------------------------
+
+function readFileAsBase64(file: File): Promise<string> {
+	return new Promise((resolve, reject) => {
+		const reader = new FileReader();
+		reader.onload = () => {
+			const result = reader.result as string;
+			// Strip the data URL prefix (e.g. "data:image/png;base64,")
+			const base64 = result.split(",")[1];
+			if (!base64) {
+				reject(new Error("Failed to read file as base64"));
+				return;
+			}
+			resolve(base64);
+		};
+		reader.onerror = () => reject(reader.error ?? new Error("FileReader error"));
+		reader.readAsDataURL(file);
+	});
+}
 
 // ---------------------------------------------------------------------------
 // Markdown rendering via `marked`

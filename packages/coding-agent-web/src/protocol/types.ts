@@ -1,3 +1,9 @@
+export interface ImageContent {
+	type: "image";
+	data: string; // base64 encoded image data
+	mimeType: string; // e.g., "image/jpeg", "image/png"
+}
+
 export interface TextContent {
 	type: "text";
 	text: string;
@@ -192,6 +198,7 @@ export interface PromptCommand {
 	id?: string;
 	type: "prompt";
 	message: string;
+	images?: ImageContent[];
 }
 
 export interface AbortCommand {

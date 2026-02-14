@@ -1,5 +1,12 @@
 import type { Transport } from "../transport/transport.js";
-import type { ContextUsage, ExtensionUiResponse, HistoryMessage, RpcResponse, SessionSummary } from "./types.js";
+import type {
+	ContextUsage,
+	ExtensionUiResponse,
+	HistoryMessage,
+	ImageContent,
+	RpcResponse,
+	SessionSummary,
+} from "./types.js";
 
 export class ProtocolClient {
 	private readonly transport: Transport;
@@ -8,10 +15,11 @@ export class ProtocolClient {
 		this.transport = transport;
 	}
 
-	async prompt(message: string): Promise<RpcResponse> {
+	async prompt(message: string, images?: ImageContent[]): Promise<RpcResponse> {
 		return this.transport.request({
 			type: "prompt",
 			message,
+			...(images && images.length > 0 ? { images } : {}),
 		});
 	}
 

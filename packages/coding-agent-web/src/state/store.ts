@@ -4,6 +4,7 @@ import type {
 	ExtensionErrorEvent,
 	ExtensionUiRequestEvent,
 	HistoryMessage,
+	ImageContent,
 	MessageUpdateEvent,
 	RpcResponse,
 	ServerEvent,
@@ -30,6 +31,8 @@ export interface UiMessage {
 	text: string;
 	/** Present only when kind === "tool". */
 	toolStep?: ToolStepData;
+	/** Attached images, present on user messages with image attachments. */
+	images?: ImageContent[];
 }
 
 export interface AppState {
@@ -108,8 +111,16 @@ export class AppStore {
 		this.emit();
 	}
 
-	addUserMessage(text: string): void {
-		this.pushMessage("user", text);
+	addUserMessage(text: string, images?: ImageContent[]): void {
+		const msg = createMessage("user", text);
+		if (images && images.length > 0) {
+			msg.images = images;
+		}
+		this.state = {
+			...this.state,
+			messages: [...this.state.messages, msg],
+		};
+		this.emit();
 	}
 
 	addErrorMessage(text: string): void {
