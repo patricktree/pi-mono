@@ -1,0 +1,14 @@
+{
+  "prompts": [
+    "-prompts/pr.md",
+    "-prompts/is.md",
+    "-prompts/cl.md"
+  ],
+  "extensions": [
+    "-extensions/redraws.ts",
+    "-extensions/prompt-url-widget.ts",
+    "-extensions/files.ts",
+    "-extensions/diff.ts",
+    "-extensions/agent-end.ts"
+  ]
+}
