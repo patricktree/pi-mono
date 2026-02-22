@@ -96,7 +96,7 @@ beforeEach(() => {
 		sessionManager: SessionManager.inMemory(),
 		settingsManager: SettingsManager.create(tempDir, tempDir),
 		cwd: tempDir,
-		modelRegistry: new ModelRegistry(new AuthStorage(join(tempDir, "auth.json")), tempDir),
+		modelRegistry: new ModelRegistry(AuthStorage.create(join(tempDir, "auth.json")), tempDir),
 		resourceLoader: createTestResourceLoader(),
 	});
 	session.subscribe(() => {});

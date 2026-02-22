@@ -212,6 +212,11 @@ export function createExtensionUIBridge(output: OutputFn): ExtensionUIBridge {
 		setToolsExpanded(_expanded: boolean) {
 			// Not supported in protocol mode
 		},
+
+		onTerminalInput(): () => void {
+			// Raw terminal input not supported in protocol mode
+			return () => {};
+		},
 	};
 
 	return {

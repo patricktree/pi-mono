@@ -44,7 +44,7 @@ beforeEach(() => {
 
 	const sessionManager = SessionManager.inMemory();
 	const settingsManager = SettingsManager.create(tempDir, tempDir);
-	const authStorage = new AuthStorage(join(tempDir, "auth.json"));
+	const authStorage = AuthStorage.create(join(tempDir, "auth.json"));
 	const modelRegistry = new ModelRegistry(authStorage, tempDir);
 
 	session = new AgentSession({
