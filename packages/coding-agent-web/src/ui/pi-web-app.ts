@@ -420,7 +420,7 @@ export class PiWebApp extends LitElement {
 			padding: 24px 24px 24px 24px;
 			display: flex;
 			flex-direction: column;
-			gap: 32px;
+			gap: 24px;
 		}
 
 		@media (max-width: 600px) {
@@ -446,7 +446,6 @@ export class PiWebApp extends LitElement {
 			padding: 12px 16px;
 			color: var(--text-strong);
 			font-size: var(--font-size-base);
-			line-height: 1.7;
 			white-space: pre-wrap;
 			word-break: break-word;
 			overflow: hidden;
@@ -505,7 +504,6 @@ export class PiWebApp extends LitElement {
 		/* Individual step messages */
 		.step {
 			font-size: var(--font-size-sm);
-			line-height: 1.6;
 			word-break: break-word;
 		}
 
@@ -527,7 +525,6 @@ export class PiWebApp extends LitElement {
 			gap: 8px;
 			font-family: var(--font-mono);
 			font-size: var(--font-size-xs);
-			line-height: 1.5;
 		}
 
 		.tool-step-name {
@@ -576,7 +573,6 @@ export class PiWebApp extends LitElement {
 			font-family: var(--font-mono);
 			font-size: var(--font-size-xs);
 			color: var(--text-weak);
-			line-height: 1.5;
 			word-break: break-all;
 			max-height: 80px;
 			overflow: hidden;
@@ -600,7 +596,6 @@ export class PiWebApp extends LitElement {
 		.step-assistant {
 			color: var(--text-strong);
 			font-size: var(--font-size-base);
-			line-height: 1.8;
 		}
 
 		.step-assistant h1 {
@@ -608,7 +603,6 @@ export class PiWebApp extends LitElement {
 			font-weight: 600;
 			color: var(--text-strong);
 			margin: 20px 0 8px;
-			line-height: 1.3;
 		}
 
 		.step-assistant h2 {
@@ -616,7 +610,6 @@ export class PiWebApp extends LitElement {
 			font-weight: 600;
 			color: var(--text-strong);
 			margin: 18px 0 6px;
-			line-height: 1.3;
 		}
 
 		.step-assistant h3 {
@@ -624,7 +617,6 @@ export class PiWebApp extends LitElement {
 			font-weight: 600;
 			color: var(--text-strong);
 			margin: 14px 0 4px;
-			line-height: 1.4;
 		}
 
 		.step-assistant h4,
@@ -685,7 +677,6 @@ export class PiWebApp extends LitElement {
 			padding: 0;
 			border-radius: 0;
 			font-size: var(--font-size-sm);
-			line-height: 1.5;
 		}
 
 		.step-assistant strong {
@@ -792,7 +783,6 @@ export class PiWebApp extends LitElement {
 			color: var(--text-strong);
 			font-family: var(--font-sans);
 			font-size: var(--font-size-base);
-			line-height: 1.6;
 			padding: 12px 16px 4px;
 			min-height: 44px;
 			max-height: 200px;
@@ -1024,7 +1014,6 @@ export class PiWebApp extends LitElement {
 			background: rgba(0, 0, 0, 0.55);
 			color: #fff;
 			font-size: 12px;
-			line-height: 1;
 			display: flex;
 			align-items: center;
 			justify-content: center;
@@ -1528,10 +1517,7 @@ export class PiWebApp extends LitElement {
 
 		return html`
 			<div class="turn">
-				<div class="user-msg">
-					${turn.user.text}
-					${turn.user.images && turn.user.images.length > 0 ? this.renderUserImages(turn.user.images) : nothing}
-				</div>
+				<div class="user-msg">${turn.user.text}${turn.user.images && turn.user.images.length > 0 ? this.renderUserImages(turn.user.images) : nothing}</div>
 
 				${
 					showSteps
