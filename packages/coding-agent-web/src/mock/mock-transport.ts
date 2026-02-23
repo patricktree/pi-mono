@@ -91,6 +91,15 @@ export class MockTransport implements Transport {
 
 			case "list_sessions": {
 				this.log("[mock] list_sessions");
+				if (this.scenario.emptySessions) {
+					return {
+						type: "response",
+						id,
+						command: "list_sessions",
+						success: true,
+						data: { sessions: [] },
+					};
+				}
 				return {
 					type: "response",
 					id,

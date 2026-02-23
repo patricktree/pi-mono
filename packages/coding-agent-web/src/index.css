@@ -1,126 +1,1089 @@
 @import "tailwindcss";
 
+/* ------------------------------------------------------------------ */
+/* Design tokens                                                       */
+/* ------------------------------------------------------------------ */
+
 :root {
-	--background: 30 20% 98%;
-	--foreground: 262 27% 12%;
-	--card: 0 0% 100%;
-	--card-foreground: 262 27% 12%;
-	--popover: 0 0% 100%;
-	--popover-foreground: 262 27% 12%;
-	--primary: 262 27% 12%;
-	--primary-foreground: 0 0% 100%;
-	--secondary: 260 13% 94%;
-	--secondary-foreground: 262 27% 12%;
-	--muted: 260 13% 93%;
-	--muted-foreground: 258 8% 45%;
-	--accent: 260 13% 92%;
-	--accent-foreground: 262 27% 12%;
-	--destructive: 356 74% 54%;
-	--border: 25 14% 84%;
-	--input: 25 14% 84%;
-	--ring: 220 92% 54%;
-	--radius: 0.625rem;
+	--oc-bg: #faf9f7;
+	--oc-fg: #1a1a2e;
+	--oc-fg-muted: #71717a;
+	--oc-fg-faint: #a1a1aa;
+	--oc-border: #e4e2de;
+	--oc-border-light: #edebe7;
+	--oc-card: #ffffff;
+	--oc-muted-bg: #f3f2ef;
+	--oc-user-bg: #f5f4f0;
+	--oc-user-border: #e4e2de;
+	--oc-accent: #10b981;
+	--oc-error: #ef4444;
+	--oc-primary: #1a1a2e;
+	--oc-primary-fg: #ffffff;
+	--oc-ring: #3b82f6;
+	--oc-radius: 10px;
+	--oc-sidebar-w: 300px;
+	--oc-sidebar-icon-w: 56px;
+	--oc-font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	--oc-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
-@theme inline {
-	--color-background: hsl(var(--background));
-	--color-foreground: hsl(var(--foreground));
-	--color-card: hsl(var(--card));
-	--color-card-foreground: hsl(var(--card-foreground));
-	--color-popover: hsl(var(--popover));
-	--color-popover-foreground: hsl(var(--popover-foreground));
-	--color-primary: hsl(var(--primary));
-	--color-primary-foreground: hsl(var(--primary-foreground));
-	--color-secondary: hsl(var(--secondary));
-	--color-secondary-foreground: hsl(var(--secondary-foreground));
-	--color-muted: hsl(var(--muted));
-	--color-muted-foreground: hsl(var(--muted-foreground));
-	--color-accent: hsl(var(--accent));
-	--color-accent-foreground: hsl(var(--accent-foreground));
-	--color-destructive: hsl(var(--destructive));
-	--color-border: hsl(var(--border));
-	--color-input: hsl(var(--input));
-	--color-ring: hsl(var(--ring));
-	--radius-sm: calc(var(--radius) - 4px);
-	--radius-md: calc(var(--radius) - 2px);
-	--radius-lg: var(--radius);
-	--radius-xl: calc(var(--radius) + 4px);
-}
+/* ------------------------------------------------------------------ */
+/* Reset / base                                                        */
+/* ------------------------------------------------------------------ */
 
 * {
 	box-sizing: border-box;
 }
 
-html,
-body,
-#app {
+html, body, #app {
 	height: 100%;
 	margin: 0;
 }
 
 body {
-	font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-	background: hsl(var(--background));
-	color: hsl(var(--foreground));
+	font-family: var(--oc-font);
+	background: var(--oc-bg);
+	color: var(--oc-fg);
+	font-size: 15px;
+	line-height: 1.5;
+	-webkit-font-smoothing: antialiased;
 }
 
-button,
-input,
-textarea {
+button, input, textarea {
 	font: inherit;
 }
 
+.oc-hidden {
+	display: none;
+}
+
+/* ------------------------------------------------------------------ */
+/* Root layout                                                         */
+/* ------------------------------------------------------------------ */
+
+.oc-root {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	position: relative;
+	overflow: hidden;
+}
+
+/* ------------------------------------------------------------------ */
+/* Overlay                                                             */
+/* ------------------------------------------------------------------ */
+
+.oc-overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 40;
+	background: rgba(0,0,0,0);
+	pointer-events: none;
+	transition: background 0.2s;
+}
+
+.oc-overlay--visible {
+	background: rgba(0,0,0,0.2);
+	backdrop-filter: blur(1px);
+	pointer-events: auto;
+}
+
+/* ------------------------------------------------------------------ */
+/* Sidebar                                                             */
+/* ------------------------------------------------------------------ */
+
+.oc-sidebar {
+	position: fixed;
+	inset-block: 0;
+	left: 0;
+	z-index: 50;
+	width: calc(var(--oc-sidebar-icon-w) + var(--oc-sidebar-w));
+	max-width: 90vw;
+	background: var(--oc-card);
+	border-right: 1px solid var(--oc-border);
+	display: flex;
+	flex-direction: row;
+	transform: translateX(-100%);
+	transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.oc-sidebar--open {
+	transform: translateX(0);
+}
+
+/* Left icon strip */
+.oc-sidebar__icons {
+	width: var(--oc-sidebar-icon-w);
+	flex-shrink: 0;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	padding: 16px 0;
+	gap: 4px;
+	border-right: 1px solid var(--oc-border-light);
+}
+
+.oc-sidebar__icons-top {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 4px;
+}
+
+.oc-sidebar__icons-bottom {
+	margin-top: auto;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 4px;
+}
+
+.oc-sidebar__logo-icon {
+	width: 36px;
+	height: 36px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border: 2px solid var(--oc-fg);
+	border-radius: 8px;
+	margin-bottom: 4px;
+}
+
+.oc-sidebar__icon-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 36px;
+	height: 36px;
+	border: none;
+	border-radius: 8px;
+	background: none;
+	color: var(--oc-fg-muted);
+	cursor: pointer;
+	padding: 0;
+}
+
+.oc-sidebar__icon-btn:hover {
+	background: var(--oc-muted-bg);
+	color: var(--oc-fg);
+}
+
+/* Right content panel */
+.oc-sidebar__content {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+.oc-sidebar__project {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	padding: 16px 16px 12px;
+}
+
+.oc-sidebar__project-info {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.oc-sidebar__project-name {
+	font-weight: 600;
+	font-size: 15px;
+}
+
+.oc-sidebar__project-path {
+	font-size: 12px;
+	color: var(--oc-fg-muted);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.oc-sidebar__new-session {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 0 12px 8px;
+	padding: 8px 12px;
+	border: 1px solid var(--oc-border);
+	border-radius: var(--oc-radius);
+	background: var(--oc-card);
+	font-size: 14px;
+	font-weight: 500;
+	cursor: pointer;
+	justify-content: center;
+}
+
+.oc-sidebar__new-session:hover {
+	background: var(--oc-muted-bg);
+}
+
+.oc-sidebar__sessions {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	padding: 0 8px;
+}
+
+.oc-sidebar__empty {
+	padding: 8px 12px;
+	font-size: 13px;
+	color: var(--oc-fg-muted);
+}
+
+.oc-sidebar__session {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	padding: 6px 12px;
+	border: none;
+	border-radius: 6px;
+	background: none;
+	text-align: left;
+	cursor: pointer;
+	font-size: 13px;
+	color: var(--oc-fg);
+}
+
+.oc-sidebar__session:hover {
+	background: var(--oc-muted-bg);
+}
+
+.oc-sidebar__session--active {
+	background: var(--oc-muted-bg);
+}
+
+.oc-sidebar__session-dash {
+	color: var(--oc-fg-faint);
+	flex-shrink: 0;
+}
+
+.oc-sidebar__session-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	flex: 1;
+	min-width: 0;
+}
+
+.oc-sidebar__session-icon {
+	flex-shrink: 0;
+	color: var(--oc-fg-faint);
+}
+
+.oc-sidebar__getting-started {
+	margin: 8px 12px 12px;
+	padding: 16px;
+	border: 1px solid var(--oc-border);
+	border-radius: var(--oc-radius);
+	background: var(--oc-card);
+}
+
+.oc-sidebar__getting-started-title {
+	font-weight: 600;
+	font-size: 14px;
+	margin: 0 0 8px;
+}
+
+.oc-sidebar__getting-started-text {
+	font-size: 13px;
+	color: var(--oc-fg-muted);
+	line-height: 1.5;
+	margin: 0 0 12px;
+}
+
+.oc-sidebar__connect-btn {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 8px 12px;
+	border: 1px solid var(--oc-border);
+	border-radius: 8px;
+	background: var(--oc-card);
+	font-size: 13px;
+	font-weight: 500;
+	cursor: pointer;
+	color: var(--oc-fg);
+	width: 100%;
+	justify-content: flex-start;
+}
+
+.oc-sidebar__connect-btn:hover {
+	background: var(--oc-muted-bg);
+}
+
+/* ------------------------------------------------------------------ */
+/* Icon button                                                         */
+/* ------------------------------------------------------------------ */
+
+.oc-icon-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	border: none;
+	border-radius: 6px;
+	background: none;
+	color: var(--oc-fg-muted);
+	cursor: pointer;
+	padding: 0;
+	flex-shrink: 0;
+}
+
+.oc-icon-btn:hover {
+	background: var(--oc-muted-bg);
+	color: var(--oc-fg);
+}
+
+.oc-icon-btn:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+/* ------------------------------------------------------------------ */
+/* Header                                                              */
+/* ------------------------------------------------------------------ */
+
+.oc-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	height: 48px;
+	padding: 0 12px;
+	border-bottom: 1px solid var(--oc-border);
+	background: var(--oc-card);
+	flex-shrink: 0;
+}
+
+.oc-header__menu-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 36px;
+	height: 36px;
+	border: none;
+	border-radius: 8px;
+	background: none;
+	color: var(--oc-fg-muted);
+	cursor: pointer;
+	padding: 0;
+}
+
+.oc-header__menu-btn:hover {
+	background: var(--oc-muted-bg);
+	color: var(--oc-fg);
+}
+
+.oc-header__actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.oc-status-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 14px;
+	border: 1px solid var(--oc-border);
+	border-radius: 20px;
+	background: var(--oc-card);
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--oc-fg);
+	cursor: pointer;
+}
+
+.oc-status-badge:hover {
+	background: var(--oc-muted-bg);
+}
+
+.oc-status-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+}
+
+.oc-status-dot--ok {
+	background: var(--oc-accent);
+}
+
+.oc-status-dot--err {
+	background: var(--oc-error);
+}
+
+.oc-share-btn {
+	display: inline-flex;
+	align-items: center;
+	padding: 6px 14px;
+	border: 1px solid var(--oc-border);
+	border-radius: 8px;
+	background: var(--oc-card);
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--oc-fg);
+	cursor: pointer;
+}
+
+.oc-share-btn:hover {
+	background: var(--oc-muted-bg);
+}
+
+/* ------------------------------------------------------------------ */
+/* Tabs                                                                */
+/* ------------------------------------------------------------------ */
+
+.oc-tabs {
+	display: flex;
+	border-bottom: 1px solid var(--oc-border);
+	background: var(--oc-card);
+	flex-shrink: 0;
+}
+
+.oc-tab {
+	flex: 1;
+	padding: 10px 0;
+	border: none;
+	background: none;
+	font-size: 14px;
+	font-weight: 500;
+	color: var(--oc-fg-muted);
+	cursor: pointer;
+	text-align: center;
+	border-bottom: 2px solid transparent;
+	margin-bottom: -1px;
+}
+
+.oc-tab--active {
+	color: var(--oc-fg);
+	border-bottom-color: var(--oc-fg);
+}
+
+.oc-tab:hover:not(.oc-tab--active) {
+	color: var(--oc-fg);
+}
+
+/* ------------------------------------------------------------------ */
+/* Content                                                             */
+/* ------------------------------------------------------------------ */
+
+.oc-content {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+}
+
+.oc-session {
+	display: flex;
+	flex-direction: column;
+	min-height: 100%;
+}
+
+/* ------------------------------------------------------------------ */
+/* Empty state                                                         */
+/* ------------------------------------------------------------------ */
+
+.oc-empty {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	justify-content: flex-end;
+	padding: 24px 20px 32px;
+}
+
+.oc-empty__title {
+	font-size: 24px;
+	font-weight: 300;
+	color: var(--oc-fg-faint);
+	margin: 0 0 20px;
+}
+
+.oc-empty__info {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.oc-empty__row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	font-size: 14px;
+	color: var(--oc-fg-muted);
+}
+
+.oc-empty__row svg {
+	color: var(--oc-fg-faint);
+	flex-shrink: 0;
+}
+
+.oc-empty__path {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.oc-empty__path strong {
+	color: var(--oc-fg);
+	font-weight: 600;
+}
+
+.oc-empty__row strong {
+	color: var(--oc-fg);
+	font-weight: 600;
+}
+
+/* ------------------------------------------------------------------ */
+/* Session title                                                       */
+/* ------------------------------------------------------------------ */
+
+.oc-session-title {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 12px 16px;
+	gap: 8px;
+}
+
+.oc-session-title__text {
+	font-size: 15px;
+	font-weight: 600;
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.oc-session-title__actions {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	flex-shrink: 0;
+}
+
+/* Thin circle spinner (matching opencode style) */
+.oc-spinner {
+	width: 16px;
+	height: 16px;
+	border: 1.5px solid var(--oc-border);
+	border-top-color: var(--oc-fg-faint);
+	border-radius: 50%;
+	animation: oc-spin 0.8s linear infinite;
+}
+
+/* ------------------------------------------------------------------ */
+/* Turns                                                               */
+/* ------------------------------------------------------------------ */
+
+.oc-turn {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	padding: 0 16px 20px;
+}
+
+.oc-orphan {
+	padding: 0 16px;
+}
+
+/* ------------------------------------------------------------------ */
+/* User message                                                        */
+/* ------------------------------------------------------------------ */
+
+.oc-user-msg-row {
+	display: flex;
+}
+
+.oc-user-msg {
+	max-width: 85%;
+	padding: 10px 16px;
+	background: var(--oc-user-bg);
+	border: 1px solid var(--oc-user-border);
+	border-radius: var(--oc-radius);
+	font-size: 14px;
+	line-height: 1.5;
+	color: var(--oc-fg);
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.oc-user-msg__images {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-top: 8px;
+}
+
+.oc-user-msg__image {
+	width: 64px;
+	height: 64px;
+	overflow: hidden;
+	border-radius: 6px;
+	border: 1px solid var(--oc-border);
+}
+
+.oc-user-msg__image img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+/* ------------------------------------------------------------------ */
+/* Thinking                                                            */
+/* ------------------------------------------------------------------ */
+
+.oc-thinking {
+	font-size: 14px;
+	color: var(--oc-fg-muted);
+	margin: 0;
+	padding: 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* Tool step                                                           */
+/* ------------------------------------------------------------------ */
+
+.oc-tool {
+	display: flex;
+	flex-direction: column;
+}
+
+.oc-tool__header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 0;
+	border: none;
+	background: none;
+	cursor: pointer;
+	text-align: left;
+	font-size: 14px;
+	color: var(--oc-fg-muted);
+}
+
+.oc-tool__header:hover {
+	color: var(--oc-fg);
+}
+
+.oc-tool__label {
+	font-weight: 600;
+	color: var(--oc-fg);
+	flex-shrink: 0;
+}
+
+.oc-tool__desc {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	min-width: 0;
+}
+
+.oc-tool__chevron {
+	color: var(--oc-fg-faint);
+	flex-shrink: 0;
+	transition: transform 0.15s;
+}
+
+.oc-tool__spinner {
+	flex-shrink: 0;
+}
+
+.oc-tool__body {
+	margin-top: 8px;
+}
+
+.oc-tool__code {
+	display: block;
+	padding: 12px 16px;
+	border: 1px solid var(--oc-border);
+	border-radius: var(--oc-radius);
+	background: var(--oc-card);
+	font-family: var(--oc-mono);
+	font-size: 13px;
+	line-height: 1.5;
+	overflow-x: auto;
+	white-space: pre-wrap;
+	word-break: break-all;
+	margin: 0;
+	color: var(--oc-fg);
+}
+
+/* ------------------------------------------------------------------ */
+/* Assistant                                                           */
+/* ------------------------------------------------------------------ */
+
+.oc-assistant {
+	font-size: 14px;
+	color: var(--oc-fg);
+}
+
+.oc-cursor {
+	display: inline-block;
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--oc-primary);
+	vertical-align: middle;
+	margin-left: 4px;
+	animation: oc-pulse 1s infinite;
+}
+
+@keyframes oc-pulse {
+	0%, 100% { opacity: 1; }
+	50% { opacity: 0.3; }
+}
+
+/* ------------------------------------------------------------------ */
+/* Error / system                                                      */
+/* ------------------------------------------------------------------ */
+
+.oc-error {
+	font-size: 13px;
+	color: var(--oc-error);
+	margin: 0;
+}
+
+.oc-system {
+	font-size: 12px;
+	color: var(--oc-fg-muted);
+	margin: 0;
+}
+
+.oc-step-text {
+	font-size: 13px;
+	margin: 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* Changes tab                                                         */
+/* ------------------------------------------------------------------ */
+
+.oc-changes {
+	display: flex;
+	flex-direction: column;
+	min-height: 300px;
+}
+
+.oc-changes__header {
+	padding: 8px 16px;
+}
+
+.oc-changes__scope {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 4px 0;
+	border: none;
+	background: none;
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--oc-fg);
+	cursor: pointer;
+}
+
+.oc-changes__scope svg {
+	color: var(--oc-fg-muted);
+}
+
+.oc-changes__empty {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	text-align: center;
+	color: var(--oc-fg-muted);
+	font-size: 14px;
+	padding: 32px;
+}
+
+.oc-changes__empty-icon {
+	margin-bottom: 12px;
+	display: flex;
+	justify-content: center;
+}
+
+/* ------------------------------------------------------------------ */
+/* Footer                                                              */
+/* ------------------------------------------------------------------ */
+
+.oc-footer {
+	flex-shrink: 0;
+	padding: 8px 12px 10px;
+	background: var(--oc-bg);
+}
+
+/* ------------------------------------------------------------------ */
+/* Prompt container                                                    */
+/* ------------------------------------------------------------------ */
+
+.oc-prompt-container {
+	border: 1px solid var(--oc-border);
+	border-radius: var(--oc-radius);
+	background: var(--oc-card);
+	overflow: hidden;
+	position: relative;
+}
+
+.oc-prompt-input {
+	display: block;
+	width: 100%;
+	min-height: 44px;
+	max-height: 200px;
+	padding: 12px 16px 4px;
+	border: none;
+	background: none;
+	outline: none;
+	resize: none;
+	font-size: 15px;
+	line-height: 1.5;
+	color: var(--oc-fg);
+}
+
+.oc-prompt-input::placeholder {
+	color: var(--oc-fg-faint);
+}
+
+.oc-prompt-input:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+/* Stop button row: positioned at top-right of prompt container */
+.oc-prompt-stop-row {
+	position: absolute;
+	top: 8px;
+	right: 8px;
+	z-index: 1;
+}
+
+.oc-prompt-actions {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	padding: 4px 8px 8px;
+	gap: 4px;
+}
+
+.oc-prompt-actions__right {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Pending images                                                      */
+/* ------------------------------------------------------------------ */
+
+.oc-pending-images {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	padding: 12px 16px 0;
+}
+
+.oc-pending-image {
+	position: relative;
+	width: 48px;
+	height: 48px;
+	overflow: hidden;
+	border-radius: 6px;
+	border: 1px solid var(--oc-border);
+}
+
+.oc-pending-image img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+.oc-pending-image__remove {
+	position: absolute;
+	top: 2px;
+	right: 2px;
+	width: 16px;
+	height: 16px;
+	border-radius: 50%;
+	border: none;
+	background: rgba(0,0,0,0.6);
+	color: white;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	padding: 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* Send button                                                         */
+/* ------------------------------------------------------------------ */
+
+.oc-send-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 34px;
+	height: 34px;
+	border: none;
+	border-radius: 8px;
+	background: var(--oc-fg-faint);
+	color: white;
+	cursor: pointer;
+	padding: 0;
+	flex-shrink: 0;
+}
+
+.oc-send-btn--active {
+	background: var(--oc-primary);
+}
+
+.oc-send-btn--stop {
+	background: var(--oc-primary);
+}
+
+.oc-send-btn:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+/* ------------------------------------------------------------------ */
+/* Stop button                                                         */
+/* ------------------------------------------------------------------ */
+
+.oc-stop-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 12px;
+	border: 1px solid var(--oc-border);
+	border-radius: 8px;
+	background: var(--oc-card);
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--oc-fg);
+	cursor: pointer;
+}
+
+.oc-stop-btn__key {
+	font-size: 11px;
+	padding: 1px 5px;
+	background: var(--oc-muted-bg);
+	border-radius: 4px;
+	color: var(--oc-fg-muted);
+	font-weight: 600;
+}
+
+/* ------------------------------------------------------------------ */
+/* Toolbar                                                             */
+/* ------------------------------------------------------------------ */
+
+.oc-toolbar {
+	display: flex;
+	align-items: center;
+	gap: 0;
+	padding: 6px 8px;
+	margin-top: 6px;
+	border: 1px solid var(--oc-border);
+	border-radius: var(--oc-radius);
+	background: var(--oc-card);
+}
+
+.oc-toolbar__item {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 4px 10px;
+	border: none;
+	border-radius: 6px;
+	background: none;
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--oc-fg-muted);
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.oc-toolbar__item:hover {
+	color: var(--oc-fg);
+	background: var(--oc-muted-bg);
+}
+
+.oc-toolbar__item svg {
+	flex-shrink: 0;
+}
+
+.oc-toolbar__spacer {
+	flex: 1;
+}
+
+.oc-toolbar__icon {
+	width: 28px;
+	height: 28px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Utility: spin                                                       */
+/* ------------------------------------------------------------------ */
+
+.oc-spin {
+	animation: oc-spin 1s linear infinite;
+}
+
+@keyframes oc-spin {
+	from { transform: rotate(0deg); }
+	to { transform: rotate(360deg); }
+}
+
+/* ------------------------------------------------------------------ */
+/* Markdown                                                            */
+/* ------------------------------------------------------------------ */
+
 .markdown {
-	color: hsl(var(--foreground));
+	color: var(--oc-fg);
 	line-height: 1.6;
 }
 
-.markdown h1,
-.markdown h2,
-.markdown h3,
-.markdown h4,
-.markdown h5,
-.markdown h6 {
+.markdown h1, .markdown h2, .markdown h3,
+.markdown h4, .markdown h5, .markdown h6 {
 	margin: 0.8rem 0 0.4rem;
 	font-weight: 600;
 	line-height: 1.3;
 }
 
-.markdown h1 {
-	font-size: 1.25rem;
-}
+.markdown h1 { font-size: 1.25rem; }
+.markdown h2 { font-size: 1.125rem; }
 
-.markdown h2 {
-	font-size: 1.125rem;
-}
-
-.markdown p,
-.markdown ul,
-.markdown ol,
-.markdown blockquote,
-.markdown table,
-.markdown pre {
+.markdown p, .markdown ul, .markdown ol,
+.markdown blockquote, .markdown table, .markdown pre {
 	margin: 0.5rem 0;
 }
 
-.markdown ul,
-.markdown ol {
+.markdown ul, .markdown ol {
 	padding-left: 1.25rem;
 }
 
 .markdown code {
-	border-radius: 0.375rem;
-	background: hsl(var(--muted));
-	padding: 1px 0.35rem;
-	font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+	border-radius: 4px;
+	background: var(--oc-muted-bg);
+	padding: 1px 5px;
+	font-family: var(--oc-mono);
 	font-size: 0.875em;
 }
 
 .markdown pre {
 	overflow-x: auto;
-	border-radius: 0.5rem;
-	background: hsl(var(--muted));
-	padding: 0.75rem 1rem;
+	border-radius: var(--oc-radius);
+	border: 1px solid var(--oc-border);
+	background: var(--oc-card);
+	padding: 12px 16px;
 }
 
 .markdown pre code {
@@ -129,9 +1092,9 @@ textarea {
 }
 
 .markdown blockquote {
-	border-left: 3px solid hsl(var(--border));
-	padding-left: 0.75rem;
-	color: hsl(var(--muted-foreground));
+	border-left: 3px solid var(--oc-border);
+	padding-left: 12px;
+	color: var(--oc-fg-muted);
 }
 
 .markdown table {
@@ -140,15 +1103,14 @@ textarea {
 	font-size: 0.875rem;
 }
 
-.markdown th,
-.markdown td {
-	border: 1px solid hsl(var(--border));
-	padding: 0.35rem 0.5rem;
+.markdown th, .markdown td {
+	border: 1px solid var(--oc-border);
+	padding: 6px 8px;
 	text-align: left;
 }
 
 .markdown a {
-	color: hsl(var(--ring));
+	color: var(--oc-ring);
 	text-decoration: underline;
 	text-underline-offset: 2px;
 }

@@ -13,6 +13,8 @@ export interface Scenario {
 	preload: ServerEvent[];
 	/** Events replayed with timing when the user sends a prompt. */
 	steps: ScenarioStep[];
+	/** If true, the mock transport returns an empty session list (fresh state). */
+	emptySessions?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -539,11 +541,22 @@ const longScenario: Scenario = {
 };
 
 // ---------------------------------------------------------------------------
+// Empty scenario: no auto-prompt, shows the initial empty state
+// ---------------------------------------------------------------------------
+
+const emptyScenario: Scenario = {
+	preload: [],
+	steps: [],
+	emptySessions: true,
+};
+
+// ---------------------------------------------------------------------------
 // Registry
 // ---------------------------------------------------------------------------
 
 export const SCENARIOS: Record<string, Scenario> = {
 	default: defaultScenario,
+	empty: emptyScenario,
 	error: errorScenario,
 	"multi-tool": multiToolScenario,
 	long: longScenario,

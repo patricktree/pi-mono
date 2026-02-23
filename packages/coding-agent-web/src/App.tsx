@@ -1,4 +1,4 @@
-import { Check, ChevronDown, ImagePlus, LoaderCircle, Menu, Plus, Square, X } from "lucide-react";
+import { ChevronDown, ClipboardList, Folder, GitBranch, HelpCircle, LoaderCircle, Menu, MoreHorizontal, Pencil, Plus, Settings, Square, Terminal, Monitor, X } from "lucide-react";
 import { Marked } from "marked";
 import DOMPurify from "dompurify";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -9,9 +9,6 @@ import type { ExtensionUiRequestEvent, ImageContent, ServerEvent, SessionSummary
 import { AppStore, type AppState, type ToolStepData, type UiMessage } from "./state/store.js";
 import type { Transport } from "./transport/transport.js";
 import { WsClient } from "./transport/ws-client.js";
-import { Badge } from "./components/ui/badge.js";
-import { Button } from "./components/ui/button.js";
-import { Textarea } from "./components/ui/textarea.js";
 
 const LOG_PREFIX = "[pi-web]";
 const MARKDOWN = new Marked({ async: false, gfm: true, breaks: false });
@@ -129,11 +126,24 @@ function Markdown({ text }: { text: string }) {
 	return <div className="markdown" dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
+/** Derive a session title from the first user message. */
+function deriveSessionTitle(messages: UiMessage[]): string | undefined {
+	for (const msg of messages) {
+		if (msg.kind === "user" && msg.text.trim()) {
+			const text = msg.text.trim();
+			return text.length > 50 ? `${text.slice(0, 50)}...` : text;
+		}
+	}
+	return undefined;
+}
+
 export function App() {
 	const [appState, setAppState] = useState<AppState>(INITIAL_STATE);
 	const [prompt, setPrompt] = useState("");
 	const [collapsedTurns, setCollapsedTurns] = useState<Set<string>>(new Set());
+	const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
 	const [pendingImages, setPendingImages] = useState<ImageContent[]>([]);
+	const [activeTab, setActiveTab] = useState<"session" | "changes">("session");
 
 	const scrollerRef = useRef<HTMLDivElement | null>(null);
 	const promptRef = useRef<HTMLTextAreaElement | null>(null);
@@ -394,6 +404,7 @@ export function App() {
 			await protocolClient.newSession();
 			storeRef.current.clearMessages();
 			setCollapsedTurns(new Set());
+			setExpandedTools(new Set());
 			await refreshSessionState();
 		} catch (sessionError) {
 			const messageText = sessionError instanceof Error ? sessionError.message : String(sessionError);
@@ -415,6 +426,7 @@ export function App() {
 			try {
 				await protocolClient.switchSession(session.path);
 				setCollapsedTurns(new Set());
+				setExpandedTools(new Set());
 				await refreshSessionState();
 				const messages = await protocolClient.getMessages();
 				if (messages.length > 0) {
@@ -433,197 +445,267 @@ export function App() {
 	const { orphans, turns } = useMemo(() => groupTurns(appState.messages), [appState.messages]);
 	const hasContent = orphans.length > 0 || turns.length > 0;
 	const latestUserId = useMemo(() => lastUserMessage(appState.messages)?.id, [appState.messages]);
+	const sessionTitle = useMemo(() => deriveSessionTitle(appState.messages), [appState.messages]);
+
+	const currentSession = useMemo(() => {
+		if (!appState.currentSessionId) return undefined;
+		return appState.sessions.find((s) => s.id === appState.currentSessionId);
+	}, [appState.currentSessionId, appState.sessions]);
 
 	return (
-		<div className="relative flex h-full flex-col bg-background text-foreground">
+		<div className="oc-root">
+			{/* Sidebar overlay */}
 			<div
-				className={
-					appState.sidebarOpen
-						? "fixed inset-0 z-40 bg-black/25 backdrop-blur-[1px]"
-						: "pointer-events-none fixed inset-0 z-40 bg-black/0"
-				}
+				className={appState.sidebarOpen ? "oc-overlay oc-overlay--visible" : "oc-overlay"}
 				onClick={() => storeRef.current.setSidebarOpen(false)}
 			/>
-			<aside
-				className={
-					appState.sidebarOpen
-						? "fixed inset-y-0 left-0 z-50 flex w-[300px] max-w-[85vw] translate-x-0 flex-col border-r bg-card transition-transform"
-						: "fixed inset-y-0 left-0 z-50 flex w-[300px] max-w-[85vw] -translate-x-full flex-col border-r bg-card transition-transform"
-				}
-			>
-				<div className="border-b px-4 py-3">
-					<p className="text-lg font-semibold">pi</p>
+
+			{/* Sidebar */}
+			<aside className={appState.sidebarOpen ? "oc-sidebar oc-sidebar--open" : "oc-sidebar"}>
+				{/* Left icon strip */}
+				<div className="oc-sidebar__icons">
+					<div className="oc-sidebar__icons-top">
+						<div className="oc-sidebar__logo-icon">
+							<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+								<rect x="3" y="3" width="18" height="18" rx="4" />
+								<rect x="8" y="8" width="8" height="8" rx="1" fill="currentColor" />
+							</svg>
+						</div>
+						<button className="oc-sidebar__icon-btn" onClick={() => void onNewSession()} type="button" aria-label="New session">
+							<Plus size={18} />
+						</button>
+					</div>
+					<div className="oc-sidebar__icons-bottom">
+						<button className="oc-sidebar__icon-btn" type="button" aria-label="Settings">
+							<Settings size={18} />
+						</button>
+						<button className="oc-sidebar__icon-btn" type="button" aria-label="Help">
+							<HelpCircle size={18} />
+						</button>
+					</div>
 				</div>
-				<div className="p-3">
-					<Button className="w-full justify-start gap-2" variant="outline" onClick={() => void onNewSession()}>
-						<Plus className="size-4" />
+
+				{/* Right content panel */}
+				<div className="oc-sidebar__content">
+					<div className="oc-sidebar__project">
+						<div className="oc-sidebar__project-info">
+							<span className="oc-sidebar__project-name">pi</span>
+							<span className="oc-sidebar__project-path">{currentSession ? shortenPath(currentSession.cwd) : "~/workspace"}</span>
+						</div>
+						<button className="oc-icon-btn" type="button">
+							<MoreHorizontal size={16} />
+						</button>
+					</div>
+
+					<button className="oc-sidebar__new-session" onClick={() => void onNewSession()} type="button">
+						<Plus size={16} />
 						New session
-					</Button>
-				</div>
-				<div className="min-h-0 flex-1 space-y-1 overflow-y-auto px-2 pb-2">
-					{appState.sessions.length === 0 ? (
-						<p className="px-3 py-2 text-sm text-muted-foreground">No sessions yet</p>
-					) : null}
-					{appState.sessions.map((session) => {
-						const displayName = session.name ?? session.firstMessage;
-						const truncated =
-							displayName.length > 60 ? `${displayName.slice(0, 60)}...` : displayName;
-						const active = session.id === appState.currentSessionId;
-						return (
-							<button
-								className={
-									active
-										? "w-full rounded-md bg-muted px-3 py-2 text-left"
-										: "w-full rounded-md px-3 py-2 text-left hover:bg-muted/70"
-								}
-								onClick={() => void onSwitchSession(session)}
-								type="button"
-								key={session.id}
-							>
-								<p className="truncate text-sm font-medium text-foreground">{truncated}</p>
-								<p className="truncate text-xs text-muted-foreground">{shortenPath(session.cwd)}</p>
-								<div className="mt-1 flex gap-2 text-xs text-muted-foreground">
-									<span>{session.messageCount} messages</span>
-									<span>{timeAgo(session.modified)}</span>
-								</div>
-							</button>
-						);
-					})}
+					</button>
+
+					<div className="oc-sidebar__sessions">
+						{appState.sessions.length === 0 ? (
+							<p className="oc-sidebar__empty">No sessions yet</p>
+						) : null}
+						{appState.sessions.map((session) => {
+							const displayName = session.name ?? session.firstMessage;
+							const truncated = displayName.length > 20 ? `${displayName.slice(0, 20)}...` : displayName;
+							const active = session.id === appState.currentSessionId;
+							return (
+								<button
+									className={active ? "oc-sidebar__session oc-sidebar__session--active" : "oc-sidebar__session"}
+									onClick={() => void onSwitchSession(session)}
+									type="button"
+									key={session.id}
+								>
+									<span className="oc-sidebar__session-dash">—</span>
+									<span className="oc-sidebar__session-name">{truncated}</span>
+									<ClipboardList size={14} className="oc-sidebar__session-icon" />
+								</button>
+							);
+						})}
+					</div>
+
+					<div className="oc-sidebar__getting-started">
+						<p className="oc-sidebar__getting-started-title">Getting started</p>
+						<p className="oc-sidebar__getting-started-text">
+							OpenCode includes free models so you can start immediately.
+							{"\n\n"}
+							Connect any provider to use models, inc. Claude, GPT, Gemini etc.
+						</p>
+						<button className="oc-sidebar__connect-btn" type="button">
+							<Plus size={14} />
+							Connect provider
+						</button>
+					</div>
 				</div>
 			</aside>
 
-			<header className="flex h-11 items-center justify-between border-b bg-card px-4">
-				<div className="flex items-center gap-2">
-					<Button
-						aria-label="Open sidebar"
-						onClick={() => storeRef.current.setSidebarOpen(true)}
-						size="icon"
-						variant="outline"
-					>
-						<Menu className="size-4" />
-					</Button>
-					<h1 className="text-lg font-semibold">pi</h1>
+			{/* Header */}
+			<header className="oc-header">
+				<button
+					className="oc-header__menu-btn"
+					onClick={() => storeRef.current.setSidebarOpen(true)}
+					type="button"
+					aria-label="Open sidebar"
+				>
+					<Menu size={18} />
+				</button>
+				<div className="oc-header__actions">
+					<button className="oc-status-badge" type="button">
+						<span className={appState.connected ? "oc-status-dot oc-status-dot--ok" : "oc-status-dot oc-status-dot--err"} />
+						Status
+					</button>
+					{hasContent ? (
+						<button className="oc-share-btn" type="button">
+							Share
+						</button>
+					) : null}
 				</div>
-				<Badge variant="outline" className="gap-2 rounded-full px-3 py-1 text-xs font-medium">
-					<span
-						className={
-							appState.connected ? "size-2 rounded-full bg-emerald-500" : "size-2 rounded-full bg-destructive"
-						}
-					/>
-					Status
-				</Badge>
 			</header>
 
-			<div className="min-h-0 flex-1 overflow-y-auto" ref={scrollerRef}>
-				<div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-6 sm:px-6">
-					{!hasContent ? (
-						<div className="flex flex-col items-center gap-4 py-20 text-center">
-							<p className="text-5xl font-bold tracking-tight text-muted-foreground/40">pi</p>
-							<p className="text-sm text-muted-foreground">Send a message to get started</p>
-						</div>
-					) : null}
+			{/* Tabs (only when there's content) */}
+			{hasContent ? (
+				<div className="oc-tabs">
+					<button
+						className={activeTab === "session" ? "oc-tab oc-tab--active" : "oc-tab"}
+						onClick={() => setActiveTab("session")}
+						type="button"
+					>
+						Session
+					</button>
+					<button
+						className={activeTab === "changes" ? "oc-tab oc-tab--active" : "oc-tab"}
+						onClick={() => setActiveTab("changes")}
+						type="button"
+					>
+						Changes
+					</button>
+				</div>
+			) : null}
 
-					{orphans.map((message) => (
-						<div className="text-sm text-muted-foreground" key={message.id}>
-							{renderStep(message)}
-						</div>
-					))}
-
-					{turns.map((turn) => {
-						const toolSteps = turn.steps.filter((step) => step.kind === "tool" || step.kind === "thinking");
-						const assistantSteps = turn.steps.filter((step) => step.kind === "assistant");
-						const errorSteps = turn.steps.filter((step) => step.kind === "error");
-						const systemSteps = turn.steps.filter((step) => step.kind === "system");
-						const isCollapsed = collapsedTurns.has(turn.user.id);
-						const isLatestTurn = turn.user.id === latestUserId;
-
-						return (
-							<section className="flex flex-col gap-4" key={turn.user.id}>
-								<div className="rounded-lg bg-muted px-4 py-3 text-sm whitespace-pre-wrap text-foreground">
-									{turn.user.text}
-									{turn.user.images && turn.user.images.length > 0 ? (
-										<div className="mt-2 flex flex-wrap gap-2">
-											{turn.user.images.map((image, index) => (
-												<div className="size-20 overflow-hidden rounded-md border" key={`${turn.user.id}-${index.toString()}`}>
-													<img
-														alt="attached image"
-														className="h-full w-full object-cover"
-														src={`data:${image.mimeType};base64,${image.data}`}
-													/>
-												</div>
-											))}
+			{/* Main content area */}
+			<div className="oc-content" ref={scrollerRef}>
+				{activeTab === "session" ? (
+					<div className="oc-session">
+						{!hasContent ? (
+							<EmptyState cwd={currentSession?.cwd} />
+						) : (
+							<>
+								{/* Session title bar */}
+								{sessionTitle ? (
+									<div className="oc-session-title">
+										<span className="oc-session-title__text">{sessionTitle}</span>
+										<div className="oc-session-title__actions">
+											{appState.streaming ? (
+												<span className="oc-spinner" />
+											) : null}
+											<button className="oc-icon-btn" type="button">
+												<MoreHorizontal size={16} />
+											</button>
 										</div>
-									) : null}
-								</div>
-
-								{toolSteps.length > 0 ? (
-									<>
-										<Button
-											className="h-auto w-fit gap-2 px-0 text-sm text-muted-foreground hover:text-foreground"
-											onClick={() => {
-												setCollapsedTurns((current) => {
-													const next = new Set(current);
-													if (next.has(turn.user.id)) {
-														next.delete(turn.user.id);
-													} else {
-														next.add(turn.user.id);
-													}
-													return next;
-												});
-											}}
-											size="sm"
-											type="button"
-											variant="ghost"
-										>
-											<ChevronDown
-												className={isCollapsed ? "size-4 -rotate-90 transition-transform" : "size-4 transition-transform"}
-											/>
-											{toolSteps.length} step{toolSteps.length > 1 ? "s" : ""}
-										</Button>
-										{!isCollapsed ? (
-											<div className="ml-3 space-y-3 border-l pl-3">
-												{toolSteps.map((message) => (
-													<div key={message.id}>{renderStep(message)}</div>
-												))}
-											</div>
-										) : null}
-									</>
+									</div>
 								) : null}
 
-								{errorSteps.map((message) => (
-									<div key={message.id}>{renderStep(message)}</div>
-								))}
-
-								{assistantSteps.map((message) => (
-									<div className="text-sm text-foreground" key={message.id}>
-										<Markdown text={message.text} />
-										{appState.streaming && isLatestTurn ? (
-											<span className="ml-1 inline-block size-1.5 animate-pulse rounded-full bg-primary align-middle" />
-										) : null}
+								{orphans.map((message) => (
+									<div className="oc-orphan" key={message.id}>
+										{renderStep(message, expandedTools, setExpandedTools)}
 									</div>
 								))}
 
-								{appState.streaming && isLatestTurn && assistantSteps.length === 0 && errorSteps.length === 0 ? (
-									<p className="text-sm text-muted-foreground">
-										Thinking
-										<span className="ml-1 inline-block size-1.5 animate-pulse rounded-full bg-primary align-middle" />
-									</p>
-								) : null}
+								{turns.map((turn) => {
+									const toolSteps = turn.steps.filter((step) => step.kind === "tool");
+									const assistantSteps = turn.steps.filter((step) => step.kind === "assistant");
+									const errorSteps = turn.steps.filter((step) => step.kind === "error");
+									const systemSteps = turn.steps.filter((step) => step.kind === "system");
+									const isLatestTurn = turn.user.id === latestUserId;
 
-								{systemSteps.map((message) => (
-									<div key={message.id}>{renderStep(message)}</div>
-								))}
-							</section>
-						);
-					})}
-				</div>
+									return (
+										<div className="oc-turn" key={turn.user.id}>
+											{/* User message - right aligned pill */}
+											<div className="oc-user-msg-row">
+												<div className="oc-user-msg">
+													{turn.user.text}
+													{turn.user.images && turn.user.images.length > 0 ? (
+														<div className="oc-user-msg__images">
+															{turn.user.images.map((image, index) => (
+																<div className="oc-user-msg__image" key={`${turn.user.id}-${index.toString()}`}>
+																	<img
+																		alt="attached"
+																		src={`data:${image.mimeType};base64,${image.data}`}
+																	/>
+																</div>
+															))}
+														</div>
+													) : null}
+												</div>
+											</div>
+
+											{/* Thinking indicator - only show during streaming when no other output yet */}
+											{appState.streaming && isLatestTurn && assistantSteps.length === 0 && errorSteps.length === 0 && toolSteps.length === 0 ? (
+												<p className="oc-thinking">Thinking</p>
+											) : null}
+
+											{/* Tool steps */}
+											{toolSteps.map((message) => (
+												<div key={message.id}>
+													{renderStep(message, expandedTools, setExpandedTools)}
+												</div>
+											))}
+
+											{/* Error steps */}
+											{errorSteps.map((message) => (
+												<div key={message.id}>{renderStep(message, expandedTools, setExpandedTools)}</div>
+											))}
+
+											{/* Assistant response */}
+											{assistantSteps.map((message) => (
+												<div className="oc-assistant" key={message.id}>
+													<Markdown text={message.text} />
+													{appState.streaming && isLatestTurn ? (
+														<span className="oc-cursor" />
+													) : null}
+												</div>
+											))}
+
+											{/* Thinking with no tool/assistant yet */}
+											{appState.streaming && isLatestTurn && assistantSteps.length === 0 && errorSteps.length === 0 && toolSteps.length > 0 ? null : null}
+
+											{systemSteps.map((message) => (
+												<div key={message.id}>{renderStep(message, expandedTools, setExpandedTools)}</div>
+											))}
+										</div>
+									);
+								})}
+							</>
+						)}
+					</div>
+				) : (
+					<div className="oc-changes">
+						<div className="oc-changes__header">
+							<button className="oc-changes__scope" type="button">
+								Session changes
+								<ChevronDown size={14} />
+							</button>
+						</div>
+						<div className="oc-changes__empty">
+							<div className="oc-changes__empty-icon">
+								<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" opacity="0.3">
+									<rect x="4" y="3" width="16" height="18" rx="2" />
+									<rect x="8" y="7" width="8" height="10" rx="1" fill="currentColor" opacity="0.15" />
+								</svg>
+							</div>
+							<p>No changes in this session yet</p>
+						</div>
+					</div>
+				)}
 			</div>
 
-			<footer className="sticky bottom-0 bg-background/95 px-4 pb-4 pt-2 backdrop-blur sm:px-6">
-				<div className="mx-auto w-full max-w-4xl rounded-xl border bg-card shadow-sm">
+			{/* Footer: prompt input + toolbar */}
+			<footer className="oc-footer">
+				<div className="oc-prompt-container">
 					<input
 						accept="image/*"
-						className="hidden"
+						className="oc-hidden"
 						id="image-attachments"
 						multiple
 						name="imageAttachments"
@@ -635,196 +717,284 @@ export function App() {
 					/>
 
 					{pendingImages.length > 0 ? (
-						<div className="flex flex-wrap gap-2 px-3 pt-3">
+						<div className="oc-pending-images">
 							{pendingImages.map((image, index) => (
-								<div className="relative size-14 overflow-hidden rounded-md border" key={`${index.toString()}-${image.mimeType}`}>
+								<div className="oc-pending-image" key={`${index.toString()}-${image.mimeType}`}>
 									<img
-										alt="pending attachment"
-										className="h-full w-full object-cover"
+										alt="pending"
 										src={`data:${image.mimeType};base64,${image.data}`}
 									/>
-									<Button
-										className="absolute right-1 top-1 size-5 rounded-full bg-black/60 p-0 text-white hover:bg-black/80"
+									<button
+										className="oc-pending-image__remove"
 										onClick={() => {
-											setPendingImages((current) => current.filter((_, imageIndex) => imageIndex !== index));
+											setPendingImages((current) => current.filter((_, i) => i !== index));
 										}}
-										size="icon"
 										type="button"
-										variant="ghost"
 									>
-										<X className="size-3" />
-									</Button>
+										<X size={10} />
+									</button>
 								</div>
 							))}
 						</div>
 					) : null}
 
-					<Textarea
-						className="max-h-[200px] min-h-11 resize-none border-0 bg-transparent px-4 pt-3 shadow-none focus-visible:ring-0"
+					<textarea
+						className="oc-prompt-input"
 						disabled={appState.streaming || !appState.connected}
-						id="prompt"
-						name="prompt"
-						onChange={(event) => {
-							setPrompt(event.currentTarget.value);
-						}}
+						onChange={(event) => setPrompt(event.currentTarget.value)}
 						onKeyDown={onPromptKeyDown}
-						placeholder="Ask anything..."
+						placeholder={hasContent ? "Ask anything..." : 'Ask anything... "Help me write a migration script"'}
 						ref={promptRef}
 						rows={1}
 						value={prompt}
 					/>
 
-					<div className="flex items-center justify-between px-3 pb-3">
-						<div />
-						<div className="flex items-center gap-2">
-							<ContextRing usage={appState.contextUsage} />
-							<Button
-								aria-label="Attach image"
+					{appState.streaming ? (
+						<div className="oc-prompt-stop-row">
+							<button className="oc-stop-btn" onClick={() => void abortPrompt()} type="button">
+								Stop
+								<span className="oc-stop-btn__key">ESC</span>
+							</button>
+						</div>
+					) : null}
+
+					<div className="oc-prompt-actions">
+						<div className="oc-prompt-actions__right">
+							<button
+								className="oc-icon-btn"
 								disabled={appState.streaming || !appState.connected}
 								onClick={onAttachImage}
-								size="icon"
-								title="Attach image"
-								variant="ghost"
+								type="button"
+								aria-label="Attach image"
 							>
-								<ImagePlus className="size-4" />
-							</Button>
+								<Plus size={18} />
+							</button>
 							{appState.streaming ? (
-								<Button onClick={() => void abortPrompt()} size="sm" variant="outline">
-									<Square className="mr-2 size-3.5" />
-									Stop
-								</Button>
-							) : (
-								<Button
-									aria-label="Send prompt"
-									disabled={!appState.connected || (!prompt.trim() && pendingImages.length === 0)}
-									onClick={() => {
-										void sendPrompt();
-									}}
-									size="icon"
-									title="Send"
+								<button
+									className="oc-send-btn oc-send-btn--stop"
+									onClick={() => void abortPrompt()}
+									type="button"
 								>
-									<ChevronDown className="size-4 rotate-180" />
-								</Button>
+									<Square size={14} />
+								</button>
+							) : (
+								<button
+									className={prompt.trim() || pendingImages.length > 0 ? "oc-send-btn oc-send-btn--active" : "oc-send-btn"}
+									disabled={!appState.connected || (!prompt.trim() && pendingImages.length === 0)}
+									onClick={() => void sendPrompt()}
+									type="button"
+									aria-label="Send"
+								>
+									<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+										<line x1="12" y1="19" x2="12" y2="5" />
+										<polyline points="5 12 12 5 19 12" />
+									</svg>
+								</button>
 							)}
 						</div>
 					</div>
+				</div>
+
+				{/* Bottom toolbar */}
+				<div className="oc-toolbar">
+					<button className="oc-toolbar__item" type="button">
+						Build
+						<ChevronDown size={12} />
+					</button>
+					<button className="oc-toolbar__item" type="button">
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+							<path d="M12 2L2 7l10 5 10-5-10-5z" />
+							<path d="M2 17l10 5 10-5" />
+							<path d="M2 12l10 5 10-5" />
+						</svg>
+						Big Pickle
+						<ChevronDown size={12} />
+					</button>
+					<button className="oc-toolbar__item" type="button">
+						Default
+						<ChevronDown size={12} />
+					</button>
+					<div className="oc-toolbar__spacer" />
+					<button className="oc-icon-btn oc-toolbar__icon" type="button">
+						<Terminal size={16} />
+					</button>
+					<button className="oc-icon-btn oc-toolbar__icon" type="button">
+						<Monitor size={16} />
+					</button>
 				</div>
 			</footer>
 		</div>
 	);
 }
 
-function renderStep(message: UiMessage) {
+function EmptyState({ cwd }: { cwd?: string }) {
+	return (
+		<div className="oc-empty">
+			<h2 className="oc-empty__title">New session</h2>
+			<div className="oc-empty__info">
+				<div className="oc-empty__row">
+					<Folder size={16} />
+					<span className="oc-empty__path">
+						{cwd ? (
+							<>
+								{cwd.replace(/\/[^/]+$/, "/")}<strong>{cwd.split("/").pop()}</strong>
+							</>
+						) : (
+							<>~/workspace/<strong>project</strong></>
+						)}
+					</span>
+				</div>
+				<div className="oc-empty__row">
+					<GitBranch size={16} />
+					<span>Main branch (dev)</span>
+				</div>
+				<div className="oc-empty__row">
+					<Pencil size={16} />
+					<span>Last modified <strong>3 minutes ago</strong></span>
+				</div>
+			</div>
+		</div>
+	);
+}
+
+function renderStep(
+	message: UiMessage,
+	expandedTools: Set<string>,
+	setExpandedTools: React.Dispatch<React.SetStateAction<Set<string>>>,
+) {
 	switch (message.kind) {
 		case "thinking":
-			return <p className="text-sm italic text-muted-foreground">{message.text}</p>;
+			// In opencode style, thinking content is not displayed to the user
+			return null;
 		case "tool":
-			return message.toolStep ? <ToolStep step={message.toolStep} /> : <p className="text-sm">{message.text}</p>;
+			return message.toolStep ? (
+				<ToolStep step={message.toolStep} messageId={message.id} expandedTools={expandedTools} setExpandedTools={setExpandedTools} />
+			) : (
+				<p className="oc-step-text">{message.text}</p>
+			);
 		case "error":
-			return <p className="text-sm text-destructive">{message.text}</p>;
+			return <p className="oc-error">{message.text}</p>;
 		case "system":
-			return <p className="text-xs text-muted-foreground">{message.text}</p>;
+			return <p className="oc-system">{message.text}</p>;
 		case "assistant":
 			return <Markdown text={message.text} />;
 		default:
-			return <p className="text-sm">{message.text}</p>;
+			return <p className="oc-step-text">{message.text}</p>;
 	}
 }
 
-function ToolStep({ step }: { step: ToolStepData }) {
+function ToolStep({
+	step,
+	messageId,
+	expandedTools,
+	setExpandedTools,
+}: {
+	step: ToolStepData;
+	messageId: string;
+	expandedTools: Set<string>;
+	setExpandedTools: React.Dispatch<React.SetStateAction<Set<string>>>;
+}) {
+	const isExpanded = expandedTools.has(messageId);
+	const toolLabel = getToolLabel(step.toolName);
+	const toolDescription = getToolDescription(step);
+
 	return (
-		<div className="space-y-1 text-sm">
-			<div className="flex flex-wrap items-center gap-2 font-mono text-xs">
-				<span className="font-medium text-amber-600">{step.toolName}</span>
-				<span className="break-all text-muted-foreground">{step.toolArgs}</span>
-			</div>
-			<div className="flex items-center gap-1.5 text-xs text-muted-foreground">{renderToolStatus(step.phase)}</div>
-			{step.result ? (
-				<div
-					className={
-						step.phase === "error"
-							? "max-h-20 overflow-hidden break-all font-mono text-xs text-destructive"
-							: "max-h-20 overflow-hidden break-all font-mono text-xs text-muted-foreground"
-					}
-				>
-					{step.result}
+		<div className="oc-tool">
+			<button
+				className="oc-tool__header"
+				onClick={() => {
+					setExpandedTools((prev) => {
+						const next = new Set(prev);
+						if (next.has(messageId)) {
+							next.delete(messageId);
+						} else {
+							next.add(messageId);
+						}
+						return next;
+					});
+				}}
+				type="button"
+			>
+				<span className="oc-tool__label">{toolLabel}</span>
+				<span className="oc-tool__desc">{toolDescription}</span>
+				{step.phase === "running" ? (
+					<LoaderCircle size={14} className="oc-spin oc-tool__spinner" />
+				) : null}
+				{isExpanded ? (
+					<ChevronDown size={14} className="oc-tool__chevron" />
+				) : null}
+			</button>
+			{isExpanded ? (
+				<div className="oc-tool__body">
+					<pre className="oc-tool__code">
+						<code>{formatToolCall(step)}</code>
+						{step.result ? (
+							<>
+								{"\n\n"}
+								<code>{step.result}</code>
+							</>
+						) : null}
+					</pre>
 				</div>
 			) : null}
 		</div>
 	);
 }
 
-function renderToolStatus(phase: ToolStepData["phase"]) {
-	switch (phase) {
-		case "calling":
-			return (
-				<>
-					<span className="text-[10px]">···</span>
-					<span>Calling...</span>
-				</>
-			);
-		case "running":
-			return (
-				<>
-					<LoaderCircle className="size-3.5 animate-spin text-primary" />
-					<span>Running...</span>
-				</>
-			);
-		case "done":
-			return (
-				<>
-					<Check className="size-3.5 text-emerald-500" />
-					<span>Done</span>
-				</>
-			);
-		case "error":
-			return (
-				<>
-					<X className="size-3.5 text-destructive" />
-					<span>Error</span>
-				</>
-			);
+function getToolLabel(toolName: string): string {
+	switch (toolName) {
+		case "bash":
+			return "Shell";
+		case "read":
+			return "Read";
+		case "write":
+			return "Write";
+		case "edit":
+			return "Edit";
+		case "glob":
+			return "Glob";
+		case "grep":
+			return "Grep";
+		default:
+			return toolName;
 	}
 }
 
-function ContextRing({ usage }: { usage: AppState["contextUsage"] }) {
-	if (!usage) return null;
-
-	const percent = Math.round(Math.min(100, Math.max(0, usage.percent)));
-	const radius = 8;
-	const circumference = 2 * Math.PI * radius;
-	const offset = circumference - (percent / 100) * circumference;
-
-	let strokeColor = "hsl(var(--muted-foreground))";
-	if (percent >= 80) {
-		strokeColor = "hsl(var(--destructive))";
-	} else if (percent >= 50) {
-		strokeColor = "#f59e0b";
+function getToolDescription(step: ToolStepData): string {
+	try {
+		const args = JSON.parse(step.toolArgs);
+		if (step.toolName === "bash" && args.command) {
+			return args.command.length > 40 ? `${args.command.slice(0, 40)}...` : args.command;
+		}
+		if (step.toolName === "read" && args.path) {
+			return args.path;
+		}
+		if (step.toolName === "write" && args.path) {
+			return args.path;
+		}
+		if (step.toolName === "edit" && args.path) {
+			return args.path;
+		}
+		if (step.toolName === "glob" && args.pattern) {
+			return args.pattern;
+		}
+		if (step.toolName === "grep" && args.pattern) {
+			return args.pattern;
+		}
+	} catch {
+		// ignore parse errors
 	}
+	return step.toolArgs.length > 40 ? `${step.toolArgs.slice(0, 40)}...` : step.toolArgs;
+}
 
-	const tokensK = Math.round(usage.tokens / 1000);
-	const windowK = Math.round(usage.contextWindow / 1000);
-	const tooltip = `${tokensK}k / ${windowK}k tokens (${percent}%)`;
-
-	return (
-		<div className="group relative inline-flex size-8 items-center justify-center">
-			<svg className="size-5 -rotate-90" viewBox="0 0 20 20">
-				<circle className="stroke-border" cx="10" cy="10" fill="none" r={radius} strokeWidth="2" />
-				<circle
-					cx="10"
-					cy="10"
-					fill="none"
-					r={radius}
-					stroke={strokeColor}
-					strokeDasharray={circumference}
-					strokeDashoffset={offset}
-					strokeLinecap="round"
-					strokeWidth="2"
-				/>
-			</svg>
-			<span className="pointer-events-none absolute -top-8 right-0 hidden rounded bg-foreground px-2 py-1 text-[11px] font-medium whitespace-nowrap text-background group-hover:block">
-				{tooltip}
-			</span>
-		</div>
-	);
+function formatToolCall(step: ToolStepData): string {
+	if (step.toolName === "bash") {
+		try {
+			const args = JSON.parse(step.toolArgs);
+			if (args.command) return `$ ${args.command}`;
+		} catch {
+			// ignore
+		}
+	}
+	return `${step.toolName}(${step.toolArgs})`;
 }
