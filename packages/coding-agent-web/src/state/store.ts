@@ -142,6 +142,14 @@ export class AppStore {
 		this.emit();
 	}
 
+	/** Update session ID and sessions list atomically to avoid intermediate renders
+	 * where the new session ID cannot be found in the stale sessions list. */
+	setSessionState(sessionId: string | null, sessions: SessionSummary[]): void {
+		const sorted = [...sessions].sort((a, b) => new Date(b.modified).getTime() - new Date(a.modified).getTime());
+		this.state = { ...this.state, currentSessionId: sessionId, sessions: sorted };
+		this.emit();
+	}
+
 	setSidebarOpen(open: boolean): void {
 		this.state = { ...this.state, sidebarOpen: open };
 		this.emit();

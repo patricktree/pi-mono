@@ -177,8 +177,7 @@ export function App() {
 		if (!protocolClient) return;
 		try {
 			const [sessionState, sessions] = await Promise.all([protocolClient.getState(), protocolClient.listSessions()]);
-			storeRef.current.setCurrentSessionId(sessionState.sessionId);
-			storeRef.current.setSessions(sessions);
+			storeRef.current.setSessionState(sessionState.sessionId, sessions);
 		} catch (refreshError) {
 			log("failed to refresh session state:", refreshError);
 		}
@@ -864,18 +863,14 @@ function EmptyState({ cwd }: { cwd?: string }) {
 		<div className="flex-1 flex flex-col justify-end px-5 pt-6 pb-8">
 			<h2 className="text-2xl font-light text-oc-fg-faint mb-5">New session</h2>
 			<div className="flex flex-col gap-2.5">
-				<div className="flex items-center gap-3 text-sm text-oc-fg-muted [&_svg]:text-oc-fg-faint [&_svg]:shrink-0 [&_strong]:text-oc-fg [&_strong]:font-semibold">
-					<Folder size={16} />
-					<span className="truncate">
-						{cwd ? (
-							<>
-								{cwd.replace(/\/[^/]+$/, "/")}<strong>{cwd.split("/").pop()}</strong>
-							</>
-						) : (
-							<>~/workspace/<strong>project</strong></>
-						)}
-					</span>
-				</div>
+				{cwd ? (
+					<div className="flex items-center gap-3 text-sm text-oc-fg-muted [&_svg]:text-oc-fg-faint [&_svg]:shrink-0 [&_strong]:text-oc-fg [&_strong]:font-semibold">
+						<Folder size={16} />
+						<span className="truncate">
+							{cwd.replace(/\/[^/]+$/, "/")}<strong>{cwd.split("/").pop()}</strong>
+						</span>
+					</div>
+				) : null}
 				<div className="flex items-center gap-3 text-sm text-oc-fg-muted [&_svg]:text-oc-fg-faint [&_svg]:shrink-0 [&_strong]:text-oc-fg [&_strong]:font-semibold">
 					<GitBranch size={16} />
 					<span>Main branch (dev)</span>
