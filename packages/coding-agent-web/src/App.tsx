@@ -140,7 +140,7 @@ function deriveSessionTitle(messages: UiMessage[]): string | undefined {
 	for (const msg of messages) {
 		if (msg.kind === "user" && msg.text.trim()) {
 			const text = msg.text.trim();
-			return text.length > 50 ? `${text.slice(0, 50)}...` : text;
+			return text;
 		}
 	}
 	return undefined;
@@ -616,6 +616,21 @@ export function App() {
 				</div>
 			) : null}
 
+			{/* Session title bar — sticky below tabs */}
+			{hasContent && sessionTitle ? (
+				<div className="flex items-center justify-between px-4 py-2 gap-2 border-b border-oc-border bg-oc-card shrink-0">
+					<span className="text-[13px] font-medium text-oc-fg-muted flex-1 min-w-0 truncate">{sessionTitle}</span>
+					<div className="flex items-center gap-1 shrink-0">
+						{appState.streaming ? (
+							<span className="w-4 h-4 border-[1.5px] border-oc-border border-t-oc-fg-faint rounded-full animate-oc-spinner" />
+						) : null}
+						<button className={ICON_BTN} type="button">
+							<MoreHorizontal size={16} />
+						</button>
+					</div>
+				</div>
+			) : null}
+
 			{/* Main content area */}
 			<div className="flex-1 min-h-0 overflow-y-auto" ref={scrollerRef}>
 				{activeTab === "session" ? (
@@ -624,21 +639,6 @@ export function App() {
 							<EmptyState cwd={currentSession?.cwd} />
 						) : (
 							<>
-								{/* Session title bar */}
-								{sessionTitle ? (
-									<div className="flex items-center justify-between px-4 py-3 gap-2">
-										<span className="text-[15px] font-semibold flex-1 min-w-0 truncate">{sessionTitle}</span>
-										<div className="flex items-center gap-1 shrink-0">
-											{appState.streaming ? (
-												<span className="w-4 h-4 border-[1.5px] border-oc-border border-t-oc-fg-faint rounded-full animate-oc-spinner" />
-											) : null}
-											<button className={ICON_BTN} type="button">
-												<MoreHorizontal size={16} />
-											</button>
-										</div>
-									</div>
-								) : null}
-
 								{orphans.map((message) => (
 									<div className="px-4" key={message.id}>
 										{renderStep(message, expandedTools, setExpandedTools)}
