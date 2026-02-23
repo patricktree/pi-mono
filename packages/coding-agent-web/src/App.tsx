@@ -2,6 +2,7 @@ import { ChevronDown, ClipboardList, Folder, GitBranch, HelpCircle, LoaderCircle
 import { Marked } from "marked";
 import DOMPurify from "dompurify";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { cn } from "./lib/utils.js";
 import { MockTransport } from "./mock/mock-transport.js";
 import { SCENARIOS } from "./mock/scenarios.js";
 import { ProtocolClient } from "./protocol/client.js";
@@ -22,6 +23,14 @@ const INITIAL_STATE: AppState = {
 	sidebarOpen: false,
 	contextUsage: undefined,
 };
+
+/** Reusable class strings for repeated button patterns. */
+const SIDEBAR_ICON_BTN =
+	"inline-flex items-center justify-center w-9 h-9 rounded-lg text-oc-fg-muted cursor-pointer hover:bg-oc-muted-bg hover:text-oc-fg";
+const ICON_BTN =
+	"inline-flex items-center justify-center w-8 h-8 rounded-md text-oc-fg-muted cursor-pointer shrink-0 hover:bg-oc-muted-bg hover:text-oc-fg disabled:opacity-40 disabled:cursor-default";
+const TOOLBAR_ITEM =
+	"inline-flex items-center gap-1 py-1 px-2.5 rounded-md text-[13px] font-medium text-oc-fg-muted cursor-pointer whitespace-nowrap hover:text-oc-fg hover:bg-oc-muted-bg [&_svg]:shrink-0";
 
 interface Turn {
 	user: UiMessage;
@@ -453,58 +462,70 @@ export function App() {
 	}, [appState.currentSessionId, appState.sessions]);
 
 	return (
-		<div className="oc-root">
+		<div className="flex flex-col h-full relative overflow-hidden">
 			{/* Sidebar overlay */}
 			<div
-				className={appState.sidebarOpen ? "oc-overlay oc-overlay--visible" : "oc-overlay"}
+				className={cn(
+					"fixed inset-0 z-40 pointer-events-none transition-colors duration-200",
+					appState.sidebarOpen && "bg-black/20 backdrop-blur-[1px] pointer-events-auto",
+				)}
 				onClick={() => storeRef.current.setSidebarOpen(false)}
 			/>
 
 			{/* Sidebar */}
-			<aside className={appState.sidebarOpen ? "oc-sidebar oc-sidebar--open" : "oc-sidebar"}>
+			<aside
+				className={cn(
+					"fixed inset-y-0 left-0 z-50 w-[356px] max-w-[90vw] bg-oc-card border-r border-oc-border flex flex-row -translate-x-full transition-transform duration-[250ms] ease-in-out",
+					appState.sidebarOpen && "translate-x-0",
+				)}
+			>
 				{/* Left icon strip */}
-				<div className="oc-sidebar__icons">
-					<div className="oc-sidebar__icons-top">
-						<div className="oc-sidebar__logo-icon">
+				<div className="w-14 shrink-0 flex flex-col items-center py-4 gap-1 border-r border-oc-border-light">
+					<div className="flex flex-col items-center gap-1">
+						<div className="w-9 h-9 flex items-center justify-center border-2 border-oc-fg rounded-lg mb-1">
 							<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
 								<rect x="3" y="3" width="18" height="18" rx="4" />
 								<rect x="8" y="8" width="8" height="8" rx="1" fill="currentColor" />
 							</svg>
 						</div>
-						<button className="oc-sidebar__icon-btn" onClick={() => void onNewSession()} type="button" aria-label="New session">
+						<button className={SIDEBAR_ICON_BTN} onClick={() => void onNewSession()} type="button" aria-label="New session">
 							<Plus size={18} />
 						</button>
 					</div>
-					<div className="oc-sidebar__icons-bottom">
-						<button className="oc-sidebar__icon-btn" type="button" aria-label="Settings">
+					<div className="mt-auto flex flex-col items-center gap-1">
+						<button className={SIDEBAR_ICON_BTN} type="button" aria-label="Settings">
 							<Settings size={18} />
 						</button>
-						<button className="oc-sidebar__icon-btn" type="button" aria-label="Help">
+						<button className={SIDEBAR_ICON_BTN} type="button" aria-label="Help">
 							<HelpCircle size={18} />
 						</button>
 					</div>
 				</div>
 
 				{/* Right content panel */}
-				<div className="oc-sidebar__content">
-					<div className="oc-sidebar__project">
-						<div className="oc-sidebar__project-info">
-							<span className="oc-sidebar__project-name">pi</span>
-							<span className="oc-sidebar__project-path">{currentSession ? shortenPath(currentSession.cwd) : "~/workspace"}</span>
+				<div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+					<div className="flex items-start justify-between px-4 pt-4 pb-3">
+						<div className="flex flex-col gap-0.5 min-w-0">
+							<span className="font-semibold text-[15px]">pi</span>
+							<span className="text-xs text-oc-fg-muted truncate">{currentSession ? shortenPath(currentSession.cwd) : "~/workspace"}</span>
 						</div>
-						<button className="oc-icon-btn" type="button">
+						<button className={ICON_BTN} type="button">
 							<MoreHorizontal size={16} />
 						</button>
 					</div>
 
-					<button className="oc-sidebar__new-session" onClick={() => void onNewSession()} type="button">
+					<button
+						className="flex items-center gap-2 mx-3 mb-2 px-3 py-2 border border-oc-border rounded-oc bg-oc-card text-sm font-medium cursor-pointer justify-center hover:bg-oc-muted-bg"
+						onClick={() => void onNewSession()}
+						type="button"
+					>
 						<Plus size={16} />
 						New session
 					</button>
 
-					<div className="oc-sidebar__sessions">
+					<div className="flex-1 min-h-0 overflow-y-auto px-2">
 						{appState.sessions.length === 0 ? (
-							<p className="oc-sidebar__empty">No sessions yet</p>
+							<p className="px-3 py-2 text-[13px] text-oc-fg-muted">No sessions yet</p>
 						) : null}
 						{appState.sessions.map((session) => {
 							const displayName = session.name ?? session.firstMessage;
@@ -512,27 +533,33 @@ export function App() {
 							const active = session.id === appState.currentSessionId;
 							return (
 								<button
-									className={active ? "oc-sidebar__session oc-sidebar__session--active" : "oc-sidebar__session"}
+									className={cn(
+										"flex items-center gap-2 w-full py-1.5 px-3 rounded-md text-left text-[13px] text-oc-fg cursor-pointer hover:bg-oc-muted-bg",
+										active && "bg-oc-muted-bg",
+									)}
 									onClick={() => void onSwitchSession(session)}
 									type="button"
 									key={session.id}
 								>
-									<span className="oc-sidebar__session-dash">—</span>
-									<span className="oc-sidebar__session-name">{truncated}</span>
-									<ClipboardList size={14} className="oc-sidebar__session-icon" />
+									<span className="text-oc-fg-faint shrink-0">—</span>
+									<span className="truncate flex-1 min-w-0">{truncated}</span>
+									<ClipboardList size={14} className="shrink-0 text-oc-fg-faint" />
 								</button>
 							);
 						})}
 					</div>
 
-					<div className="oc-sidebar__getting-started">
-						<p className="oc-sidebar__getting-started-title">Getting started</p>
-						<p className="oc-sidebar__getting-started-text">
+					<div className="mx-3 mt-2 mb-3 p-4 border border-oc-border rounded-oc bg-oc-card">
+						<p className="font-semibold text-sm mb-2">Getting started</p>
+						<p className="text-[13px] text-oc-fg-muted leading-normal mb-3">
 							OpenCode includes free models so you can start immediately.
 							{"\n\n"}
 							Connect any provider to use models, inc. Claude, GPT, Gemini etc.
 						</p>
-						<button className="oc-sidebar__connect-btn" type="button">
+						<button
+							className="flex items-center gap-1.5 py-2 px-3 border border-oc-border rounded-lg bg-oc-card text-[13px] font-medium text-oc-fg w-full justify-start cursor-pointer hover:bg-oc-muted-bg"
+							type="button"
+						>
 							<Plus size={14} />
 							Connect provider
 						</button>
@@ -541,22 +568,22 @@ export function App() {
 			</aside>
 
 			{/* Header */}
-			<header className="oc-header">
+			<header className="flex items-center justify-between h-12 px-3 border-b border-oc-border bg-oc-card shrink-0">
 				<button
-					className="oc-header__menu-btn"
+					className={SIDEBAR_ICON_BTN}
 					onClick={() => storeRef.current.setSidebarOpen(true)}
 					type="button"
 					aria-label="Open sidebar"
 				>
 					<Menu size={18} />
 				</button>
-				<div className="oc-header__actions">
-					<button className="oc-status-badge" type="button">
-						<span className={appState.connected ? "oc-status-dot oc-status-dot--ok" : "oc-status-dot oc-status-dot--err"} />
+				<div className="flex items-center gap-2">
+					<button className="inline-flex items-center gap-2 px-3.5 py-1.5 border border-oc-border rounded-full bg-oc-card text-[13px] font-medium text-oc-fg cursor-pointer hover:bg-oc-muted-bg" type="button">
+						<span className={cn("w-2 h-2 rounded-full", appState.connected ? "bg-oc-accent" : "bg-oc-error")} />
 						Status
 					</button>
 					{hasContent ? (
-						<button className="oc-share-btn" type="button">
+						<button className="inline-flex items-center px-3.5 py-1.5 border border-oc-border rounded-lg bg-oc-card text-[13px] font-medium text-oc-fg cursor-pointer hover:bg-oc-muted-bg" type="button">
 							Share
 						</button>
 					) : null}
@@ -565,16 +592,22 @@ export function App() {
 
 			{/* Tabs (only when there's content) */}
 			{hasContent ? (
-				<div className="oc-tabs">
+				<div className="flex border-b border-oc-border bg-oc-card shrink-0">
 					<button
-						className={activeTab === "session" ? "oc-tab oc-tab--active" : "oc-tab"}
+						className={cn(
+							"flex-1 py-2.5 text-sm font-medium text-oc-fg-muted cursor-pointer text-center border-b-2 border-b-transparent -mb-px hover:text-oc-fg",
+							activeTab === "session" && "text-oc-fg border-b-oc-fg",
+						)}
 						onClick={() => setActiveTab("session")}
 						type="button"
 					>
 						Session
 					</button>
 					<button
-						className={activeTab === "changes" ? "oc-tab oc-tab--active" : "oc-tab"}
+						className={cn(
+							"flex-1 py-2.5 text-sm font-medium text-oc-fg-muted cursor-pointer text-center border-b-2 border-b-transparent -mb-px hover:text-oc-fg",
+							activeTab === "changes" && "text-oc-fg border-b-oc-fg",
+						)}
 						onClick={() => setActiveTab("changes")}
 						type="button"
 					>
@@ -584,22 +617,22 @@ export function App() {
 			) : null}
 
 			{/* Main content area */}
-			<div className="oc-content" ref={scrollerRef}>
+			<div className="flex-1 min-h-0 overflow-y-auto" ref={scrollerRef}>
 				{activeTab === "session" ? (
-					<div className="oc-session">
+					<div className="flex flex-col min-h-full">
 						{!hasContent ? (
 							<EmptyState cwd={currentSession?.cwd} />
 						) : (
 							<>
 								{/* Session title bar */}
 								{sessionTitle ? (
-									<div className="oc-session-title">
-										<span className="oc-session-title__text">{sessionTitle}</span>
-										<div className="oc-session-title__actions">
+									<div className="flex items-center justify-between px-4 py-3 gap-2">
+										<span className="text-[15px] font-semibold flex-1 min-w-0 truncate">{sessionTitle}</span>
+										<div className="flex items-center gap-1 shrink-0">
 											{appState.streaming ? (
-												<span className="oc-spinner" />
+												<span className="w-4 h-4 border-[1.5px] border-oc-border border-t-oc-fg-faint rounded-full animate-oc-spinner" />
 											) : null}
-											<button className="oc-icon-btn" type="button">
+											<button className={ICON_BTN} type="button">
 												<MoreHorizontal size={16} />
 											</button>
 										</div>
@@ -607,7 +640,7 @@ export function App() {
 								) : null}
 
 								{orphans.map((message) => (
-									<div className="oc-orphan" key={message.id}>
+									<div className="px-4" key={message.id}>
 										{renderStep(message, expandedTools, setExpandedTools)}
 									</div>
 								))}
@@ -620,18 +653,19 @@ export function App() {
 									const isLatestTurn = turn.user.id === latestUserId;
 
 									return (
-										<div className="oc-turn" key={turn.user.id}>
+										<div className="flex flex-col gap-4 px-4 pb-5" key={turn.user.id}>
 											{/* User message - right aligned pill */}
-											<div className="oc-user-msg-row">
-												<div className="oc-user-msg">
+											<div className="flex">
+												<div className="max-w-[85%] px-4 py-2.5 bg-oc-user-bg border border-oc-user-border rounded-oc text-sm leading-normal text-oc-fg whitespace-pre-wrap break-words">
 													{turn.user.text}
 													{turn.user.images && turn.user.images.length > 0 ? (
-														<div className="oc-user-msg__images">
+														<div className="flex flex-wrap gap-2 mt-2">
 															{turn.user.images.map((image, index) => (
-																<div className="oc-user-msg__image" key={`${turn.user.id}-${index.toString()}`}>
+																<div className="w-16 h-16 overflow-hidden rounded-md border border-oc-border" key={`${turn.user.id}-${index.toString()}`}>
 																	<img
 																		alt="attached"
 																		src={`data:${image.mimeType};base64,${image.data}`}
+																		className="w-full h-full object-cover"
 																	/>
 																</div>
 															))}
@@ -642,7 +676,7 @@ export function App() {
 
 											{/* Thinking indicator - only show during streaming when no other output yet */}
 											{appState.streaming && isLatestTurn && assistantSteps.length === 0 && errorSteps.length === 0 && toolSteps.length === 0 ? (
-												<p className="oc-thinking">Thinking</p>
+												<p className="text-sm text-oc-fg-muted">Thinking</p>
 											) : null}
 
 											{/* Tool steps */}
@@ -659,10 +693,10 @@ export function App() {
 
 											{/* Assistant response */}
 											{assistantSteps.map((message) => (
-												<div className="oc-assistant" key={message.id}>
+												<div className="text-sm text-oc-fg" key={message.id}>
 													<Markdown text={message.text} />
 													{appState.streaming && isLatestTurn ? (
-														<span className="oc-cursor" />
+														<span className="inline-block w-1.5 h-1.5 rounded-full bg-oc-primary align-middle ml-1 animate-oc-pulse" />
 													) : null}
 												</div>
 											))}
@@ -680,15 +714,15 @@ export function App() {
 						)}
 					</div>
 				) : (
-					<div className="oc-changes">
-						<div className="oc-changes__header">
-							<button className="oc-changes__scope" type="button">
+					<div className="flex flex-col min-h-[300px]">
+						<div className="px-4 py-2">
+							<button className="inline-flex items-center gap-1 py-1 text-sm font-semibold text-oc-fg cursor-pointer [&_svg]:text-oc-fg-muted" type="button">
 								Session changes
 								<ChevronDown size={14} />
 							</button>
 						</div>
-						<div className="oc-changes__empty">
-							<div className="oc-changes__empty-icon">
+						<div className="flex-1 flex flex-col items-center justify-center text-center text-oc-fg-muted text-sm p-8">
+							<div className="mb-3 flex justify-center">
 								<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" opacity="0.3">
 									<rect x="4" y="3" width="16" height="18" rx="2" />
 									<rect x="8" y="7" width="8" height="10" rx="1" fill="currentColor" opacity="0.15" />
@@ -701,11 +735,11 @@ export function App() {
 			</div>
 
 			{/* Footer: prompt input + toolbar */}
-			<footer className="oc-footer">
-				<div className="oc-prompt-container">
+			<footer className="shrink-0 px-3 pt-2 pb-2.5 bg-oc-bg">
+				<div className="border border-oc-border rounded-oc bg-oc-card overflow-hidden relative">
 					<input
 						accept="image/*"
-						className="oc-hidden"
+						className="hidden"
 						id="image-attachments"
 						multiple
 						name="imageAttachments"
@@ -717,15 +751,16 @@ export function App() {
 					/>
 
 					{pendingImages.length > 0 ? (
-						<div className="oc-pending-images">
+						<div className="flex flex-wrap gap-2 px-4 pt-3">
 							{pendingImages.map((image, index) => (
-								<div className="oc-pending-image" key={`${index.toString()}-${image.mimeType}`}>
+								<div className="relative w-12 h-12 overflow-hidden rounded-md border border-oc-border" key={`${index.toString()}-${image.mimeType}`}>
 									<img
 										alt="pending"
 										src={`data:${image.mimeType};base64,${image.data}`}
+										className="w-full h-full object-cover"
 									/>
 									<button
-										className="oc-pending-image__remove"
+										className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-black/60 text-white flex items-center justify-center cursor-pointer"
 										onClick={() => {
 											setPendingImages((current) => current.filter((_, i) => i !== index));
 										}}
@@ -739,7 +774,7 @@ export function App() {
 					) : null}
 
 					<textarea
-						className="oc-prompt-input"
+						className="block w-full min-h-[44px] max-h-[200px] pt-3 px-4 pb-1 bg-transparent outline-none resize-none text-[15px] leading-normal text-oc-fg placeholder:text-oc-fg-faint disabled:opacity-50 disabled:cursor-not-allowed"
 						disabled={appState.streaming || !appState.connected}
 						onChange={(event) => setPrompt(event.currentTarget.value)}
 						onKeyDown={onPromptKeyDown}
@@ -750,18 +785,22 @@ export function App() {
 					/>
 
 					{appState.streaming ? (
-						<div className="oc-prompt-stop-row">
-							<button className="oc-stop-btn" onClick={() => void abortPrompt()} type="button">
+						<div className="absolute top-2 right-2 z-[1]">
+							<button
+								className="inline-flex items-center gap-1.5 py-1.5 px-3 border border-oc-border rounded-lg bg-oc-card text-[13px] font-medium text-oc-fg cursor-pointer"
+								onClick={() => void abortPrompt()}
+								type="button"
+							>
 								Stop
-								<span className="oc-stop-btn__key">ESC</span>
+								<span className="text-[11px] py-px px-[5px] bg-oc-muted-bg rounded text-oc-fg-muted font-semibold">ESC</span>
 							</button>
 						</div>
 					) : null}
 
-					<div className="oc-prompt-actions">
-						<div className="oc-prompt-actions__right">
+					<div className="flex items-center justify-end px-2 pt-1 pb-2 gap-1">
+						<div className="flex items-center gap-1">
 							<button
-								className="oc-icon-btn"
+								className={ICON_BTN}
 								disabled={appState.streaming || !appState.connected}
 								onClick={onAttachImage}
 								type="button"
@@ -771,7 +810,7 @@ export function App() {
 							</button>
 							{appState.streaming ? (
 								<button
-									className="oc-send-btn oc-send-btn--stop"
+									className="inline-flex items-center justify-center w-[34px] h-[34px] rounded-lg bg-oc-primary text-white cursor-pointer shrink-0"
 									onClick={() => void abortPrompt()}
 									type="button"
 								>
@@ -779,7 +818,10 @@ export function App() {
 								</button>
 							) : (
 								<button
-									className={prompt.trim() || pendingImages.length > 0 ? "oc-send-btn oc-send-btn--active" : "oc-send-btn"}
+									className={cn(
+										"inline-flex items-center justify-center w-[34px] h-[34px] rounded-lg text-white cursor-pointer shrink-0 disabled:opacity-40 disabled:cursor-default",
+										prompt.trim() || pendingImages.length > 0 ? "bg-oc-primary" : "bg-oc-fg-faint",
+									)}
 									disabled={!appState.connected || (!prompt.trim() && pendingImages.length === 0)}
 									onClick={() => void sendPrompt()}
 									type="button"
@@ -796,12 +838,12 @@ export function App() {
 				</div>
 
 				{/* Bottom toolbar */}
-				<div className="oc-toolbar">
-					<button className="oc-toolbar__item" type="button">
+				<div className="flex items-center gap-0 py-1.5 px-2 mt-1.5 border border-oc-border rounded-oc bg-oc-card">
+					<button className={TOOLBAR_ITEM} type="button">
 						Build
 						<ChevronDown size={12} />
 					</button>
-					<button className="oc-toolbar__item" type="button">
+					<button className={TOOLBAR_ITEM} type="button">
 						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
 							<path d="M12 2L2 7l10 5 10-5-10-5z" />
 							<path d="M2 17l10 5 10-5" />
@@ -810,15 +852,15 @@ export function App() {
 						Big Pickle
 						<ChevronDown size={12} />
 					</button>
-					<button className="oc-toolbar__item" type="button">
+					<button className={TOOLBAR_ITEM} type="button">
 						Default
 						<ChevronDown size={12} />
 					</button>
-					<div className="oc-toolbar__spacer" />
-					<button className="oc-icon-btn oc-toolbar__icon" type="button">
+					<div className="flex-1" />
+					<button className={cn(ICON_BTN, "w-7 h-7")} type="button">
 						<Terminal size={16} />
 					</button>
-					<button className="oc-icon-btn oc-toolbar__icon" type="button">
+					<button className={cn(ICON_BTN, "w-7 h-7")} type="button">
 						<Monitor size={16} />
 					</button>
 				</div>
@@ -829,12 +871,12 @@ export function App() {
 
 function EmptyState({ cwd }: { cwd?: string }) {
 	return (
-		<div className="oc-empty">
-			<h2 className="oc-empty__title">New session</h2>
-			<div className="oc-empty__info">
-				<div className="oc-empty__row">
+		<div className="flex-1 flex flex-col justify-end px-5 pt-6 pb-8">
+			<h2 className="text-2xl font-light text-oc-fg-faint mb-5">New session</h2>
+			<div className="flex flex-col gap-2.5">
+				<div className="flex items-center gap-3 text-sm text-oc-fg-muted [&_svg]:text-oc-fg-faint [&_svg]:shrink-0 [&_strong]:text-oc-fg [&_strong]:font-semibold">
 					<Folder size={16} />
-					<span className="oc-empty__path">
+					<span className="truncate">
 						{cwd ? (
 							<>
 								{cwd.replace(/\/[^/]+$/, "/")}<strong>{cwd.split("/").pop()}</strong>
@@ -844,11 +886,11 @@ function EmptyState({ cwd }: { cwd?: string }) {
 						)}
 					</span>
 				</div>
-				<div className="oc-empty__row">
+				<div className="flex items-center gap-3 text-sm text-oc-fg-muted [&_svg]:text-oc-fg-faint [&_svg]:shrink-0 [&_strong]:text-oc-fg [&_strong]:font-semibold">
 					<GitBranch size={16} />
 					<span>Main branch (dev)</span>
 				</div>
-				<div className="oc-empty__row">
+				<div className="flex items-center gap-3 text-sm text-oc-fg-muted [&_svg]:text-oc-fg-faint [&_svg]:shrink-0 [&_strong]:text-oc-fg [&_strong]:font-semibold">
 					<Pencil size={16} />
 					<span>Last modified <strong>3 minutes ago</strong></span>
 				</div>
@@ -864,22 +906,21 @@ function renderStep(
 ) {
 	switch (message.kind) {
 		case "thinking":
-			// In opencode style, thinking content is not displayed to the user
 			return null;
 		case "tool":
 			return message.toolStep ? (
 				<ToolStep step={message.toolStep} messageId={message.id} expandedTools={expandedTools} setExpandedTools={setExpandedTools} />
 			) : (
-				<p className="oc-step-text">{message.text}</p>
+				<p className="text-[13px]">{message.text}</p>
 			);
 		case "error":
-			return <p className="oc-error">{message.text}</p>;
+			return <p className="text-[13px] text-oc-error">{message.text}</p>;
 		case "system":
-			return <p className="oc-system">{message.text}</p>;
+			return <p className="text-xs text-oc-fg-muted">{message.text}</p>;
 		case "assistant":
 			return <Markdown text={message.text} />;
 		default:
-			return <p className="oc-step-text">{message.text}</p>;
+			return <p className="text-[13px]">{message.text}</p>;
 	}
 }
 
@@ -899,9 +940,9 @@ function ToolStep({
 	const toolDescription = getToolDescription(step);
 
 	return (
-		<div className="oc-tool">
+		<div className="flex flex-col">
 			<button
-				className="oc-tool__header"
+				className="flex items-center gap-2 text-left text-sm text-oc-fg-muted cursor-pointer hover:text-oc-fg"
 				onClick={() => {
 					setExpandedTools((prev) => {
 						const next = new Set(prev);
@@ -915,18 +956,18 @@ function ToolStep({
 				}}
 				type="button"
 			>
-				<span className="oc-tool__label">{toolLabel}</span>
-				<span className="oc-tool__desc">{toolDescription}</span>
+				<span className="font-semibold text-oc-fg shrink-0">{toolLabel}</span>
+				<span className="truncate min-w-0">{toolDescription}</span>
 				{step.phase === "running" ? (
-					<LoaderCircle size={14} className="oc-spin oc-tool__spinner" />
+					<LoaderCircle size={14} className="animate-spin shrink-0" />
 				) : null}
 				{isExpanded ? (
-					<ChevronDown size={14} className="oc-tool__chevron" />
+					<ChevronDown size={14} className="text-oc-fg-faint shrink-0 transition-transform duration-150" />
 				) : null}
 			</button>
 			{isExpanded ? (
-				<div className="oc-tool__body">
-					<pre className="oc-tool__code">
+				<div className="mt-2">
+					<pre className="block px-4 py-3 border border-oc-border rounded-oc bg-oc-card font-mono text-[13px] leading-normal overflow-x-auto whitespace-pre-wrap break-all m-0 text-oc-fg">
 						<code>{formatToolCall(step)}</code>
 						{step.result ? (
 							<>
