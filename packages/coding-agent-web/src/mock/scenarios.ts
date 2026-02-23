@@ -551,6 +551,261 @@ const emptyScenario: Scenario = {
 };
 
 // ---------------------------------------------------------------------------
+// Interleaved scenario: text and tool calls alternate across multiple turns
+// ---------------------------------------------------------------------------
+
+const INTERLEAVED_TEXT_1 = "Let me read the CSS file to understand the current styles.";
+
+const INTERLEAVED_TEXT_2 =
+	"I see the issue. Tailwind's preflight resets `list-style: none` on all `ul` / `ol`. Let me fix that.";
+
+const INTERLEAVED_TEXT_3 = "Now let me verify visually that the fix works correctly.";
+
+const INTERLEAVED_TEXT_4 =
+	"The bullet points and numbered lists are now rendering correctly. The fix restores `list-style-type` for markdown content.";
+
+const interleavedScenario: Scenario = {
+	autoPrompt: "Fix the missing bullet points in markdown lists",
+	preload: [],
+	steps: [
+		{ delay: 100, event: { type: "agent_start" } },
+		// Turn 1: text + read tool call
+		{
+			delay: 50,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: { type: "text_start" },
+			},
+		},
+		...textDeltas(INTERLEAVED_TEXT_1, 8, 20),
+		{
+			delay: 20,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: { type: "text_end", content: INTERLEAVED_TEXT_1 },
+			},
+		},
+		{
+			delay: 50,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: { type: "toolcall_start" },
+			},
+		},
+		{
+			delay: 80,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: {
+					type: "toolcall_end",
+					toolCall: { type: "toolCall", id: "tc_1", name: "read", arguments: { path: "src/index.css" } },
+				},
+			},
+		},
+		{
+			delay: 50,
+			event: {
+				type: "message_end",
+				message: {
+					role: "assistant",
+					content: [
+						{ type: "text", text: INTERLEAVED_TEXT_1 },
+						{ type: "toolCall", id: "tc_1", name: "read", arguments: { path: "src/index.css" } },
+					],
+					timestamp: Date.now(),
+				},
+			},
+		},
+		{ delay: 50, event: { type: "tool_execution_start", toolName: "read" } },
+		{
+			delay: 300,
+			event: {
+				type: "tool_execution_end",
+				toolName: "read",
+				result: {
+					content: [{ type: "text", text: "@tailwind base;\n@tailwind components;\n@tailwind utilities;" }],
+				},
+				isError: false,
+			},
+		},
+		// Turn 2: text + edit tool call
+		{
+			delay: 100,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: { type: "text_start" },
+			},
+		},
+		...textDeltas(INTERLEAVED_TEXT_2, 8, 20),
+		{
+			delay: 20,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: { type: "text_end", content: INTERLEAVED_TEXT_2 },
+			},
+		},
+		{
+			delay: 50,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: { type: "toolcall_start" },
+			},
+		},
+		{
+			delay: 80,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: {
+					type: "toolcall_end",
+					toolCall: {
+						type: "toolCall",
+						id: "tc_2",
+						name: "edit",
+						arguments: {
+							path: "src/index.css",
+							oldText: "@tailwind utilities;",
+							newText: "@tailwind utilities;\n\n.markdown ul { list-style-type: disc; }",
+						},
+					},
+				},
+			},
+		},
+		{
+			delay: 50,
+			event: {
+				type: "message_end",
+				message: {
+					role: "assistant",
+					content: [
+						{ type: "text", text: INTERLEAVED_TEXT_2 },
+						{
+							type: "toolCall",
+							id: "tc_2",
+							name: "edit",
+							arguments: {
+								path: "src/index.css",
+								oldText: "@tailwind utilities;",
+								newText: "@tailwind utilities;\n\n.markdown ul { list-style-type: disc; }",
+							},
+						},
+					],
+					timestamp: Date.now(),
+				},
+			},
+		},
+		{ delay: 50, event: { type: "tool_execution_start", toolName: "edit" } },
+		{
+			delay: 200,
+			event: {
+				type: "tool_execution_end",
+				toolName: "edit",
+				result: { content: [{ type: "text", text: "OK" }] },
+				isError: false,
+			},
+		},
+		// Turn 3: text + bash tool call
+		{
+			delay: 100,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: { type: "text_start" },
+			},
+		},
+		...textDeltas(INTERLEAVED_TEXT_3, 8, 20),
+		{
+			delay: 20,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: { type: "text_end", content: INTERLEAVED_TEXT_3 },
+			},
+		},
+		{
+			delay: 50,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: { type: "toolcall_start" },
+			},
+		},
+		{
+			delay: 80,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: {
+					type: "toolcall_end",
+					toolCall: { type: "toolCall", id: "tc_3", name: "bash", arguments: { command: "npm run check" } },
+				},
+			},
+		},
+		{
+			delay: 50,
+			event: {
+				type: "message_end",
+				message: {
+					role: "assistant",
+					content: [
+						{ type: "text", text: INTERLEAVED_TEXT_3 },
+						{ type: "toolCall", id: "tc_3", name: "bash", arguments: { command: "npm run check" } },
+					],
+					timestamp: Date.now(),
+				},
+			},
+		},
+		{ delay: 50, event: { type: "tool_execution_start", toolName: "bash" } },
+		{
+			delay: 500,
+			event: {
+				type: "tool_execution_end",
+				toolName: "bash",
+				result: { content: [{ type: "text", text: "All checks passed." }] },
+				isError: false,
+			},
+		},
+		// Turn 4: final text answer
+		{
+			delay: 100,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: { type: "text_start" },
+			},
+		},
+		...textDeltas(INTERLEAVED_TEXT_4, 8, 20),
+		{
+			delay: 20,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: { type: "text_end", content: INTERLEAVED_TEXT_4 },
+			},
+		},
+		{
+			delay: 50,
+			event: {
+				type: "message_end",
+				message: {
+					role: "assistant",
+					content: [{ type: "text", text: INTERLEAVED_TEXT_4 }],
+					timestamp: Date.now(),
+				},
+			},
+		},
+		{ delay: 50, event: { type: "agent_end" } },
+	],
+};
+
+// ---------------------------------------------------------------------------
 // Registry
 // ---------------------------------------------------------------------------
 
@@ -560,4 +815,5 @@ export const SCENARIOS: Record<string, Scenario> = {
 	error: errorScenario,
 	"multi-tool": multiToolScenario,
 	long: longScenario,
+	interleaved: interleavedScenario,
 };

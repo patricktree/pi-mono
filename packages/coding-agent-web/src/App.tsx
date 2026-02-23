@@ -646,11 +646,8 @@ export function App() {
 								))}
 
 								{turns.map((turn) => {
-									const toolSteps = turn.steps.filter((step) => step.kind === "tool");
-									const assistantSteps = turn.steps.filter((step) => step.kind === "assistant");
-									const errorSteps = turn.steps.filter((step) => step.kind === "error");
-									const systemSteps = turn.steps.filter((step) => step.kind === "system");
 									const isLatestTurn = turn.user.id === latestUserId;
+									const hasOutput = turn.steps.some((s) => s.kind === "assistant" || s.kind === "error" || s.kind === "tool");
 
 									return (
 										<div className="flex flex-col gap-4 px-4 pb-5" key={turn.user.id}>
@@ -675,38 +672,31 @@ export function App() {
 											</div>
 
 											{/* Thinking indicator - only show during streaming when no other output yet */}
-											{appState.streaming && isLatestTurn && assistantSteps.length === 0 && errorSteps.length === 0 && toolSteps.length === 0 ? (
+											{appState.streaming && isLatestTurn && !hasOutput ? (
 												<p className="text-sm text-oc-fg-muted">Thinking</p>
 											) : null}
 
-											{/* Tool steps */}
-											{toolSteps.map((message) => (
-												<div key={message.id}>
-													{renderStep(message, expandedTools, setExpandedTools)}
-												</div>
-											))}
-
-											{/* Error steps */}
-											{errorSteps.map((message) => (
-												<div key={message.id}>{renderStep(message, expandedTools, setExpandedTools)}</div>
-											))}
-
-											{/* Assistant response */}
-											{assistantSteps.map((message) => (
-												<div className="text-sm text-oc-fg" key={message.id}>
-													<Markdown text={message.text} />
-													{appState.streaming && isLatestTurn ? (
-														<span className="inline-block w-1.5 h-1.5 rounded-full bg-oc-primary align-middle ml-1 animate-oc-pulse" />
-													) : null}
-												</div>
-											))}
-
-											{/* Thinking with no tool/assistant yet */}
-											{appState.streaming && isLatestTurn && assistantSteps.length === 0 && errorSteps.length === 0 && toolSteps.length > 0 ? null : null}
-
-											{systemSteps.map((message) => (
-												<div key={message.id}>{renderStep(message, expandedTools, setExpandedTools)}</div>
-											))}
+											{/* Steps rendered in original order to preserve interleaving */}
+											{turn.steps.map((message) => {
+												if (message.kind === "assistant") {
+													return (
+														<div className="text-sm text-oc-fg" key={message.id}>
+															<Markdown text={message.text} />
+															{appState.streaming && isLatestTurn && message.id === turn.steps.filter((s) => s.kind === "assistant").at(-1)?.id ? (
+																<span className="inline-block w-1.5 h-1.5 rounded-full bg-oc-primary align-middle ml-1 animate-oc-pulse" />
+															) : null}
+														</div>
+													);
+												}
+												if (message.kind === "thinking") {
+													return null;
+												}
+												return (
+													<div key={message.id}>
+														{renderStep(message, expandedTools, setExpandedTools)}
+													</div>
+												);
+											})}
 										</div>
 									);
 								})}
