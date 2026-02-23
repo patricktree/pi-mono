@@ -1,3 +1,4 @@
+import { css } from "@linaria/core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BottomToolbar } from "./components/BottomToolbar.js";
 import { ChangesPanel } from "./components/ChangesPanel.js";
@@ -25,6 +26,26 @@ const INITIAL_STATE: AppState = {
 	sidebarOpen: false,
 	contextUsage: undefined,
 };
+
+const appRoot = css`
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	position: relative;
+	overflow: hidden;
+`;
+
+const mainScroller = css`
+	flex: 1 1 0%;
+	min-height: 0;
+	overflow-y: auto;
+`;
+
+const footerStyle = css`
+	flex-shrink: 0;
+	padding: 8px 12px 10px;
+	background-color: var(--color-oc-bg);
+`;
 
 export function App() {
 	const [appState, setAppState] = useState<AppState>(INITIAL_STATE);
@@ -290,7 +311,7 @@ export function App() {
 	}, [appState.currentSessionId, appState.sessions]);
 
 	return (
-		<div className="flex flex-col h-full relative overflow-hidden">
+		<div className={appRoot}>
 			<Sidebar
 				open={appState.sidebarOpen}
 				sessions={appState.sessions}
@@ -314,7 +335,7 @@ export function App() {
 			) : null}
 
 			{/* Main content area */}
-			<div className="flex-1 min-h-0 overflow-y-auto" ref={scrollerRef}>
+			<div className={mainScroller} ref={scrollerRef}>
 				{activeTab === "session" ? (
 					<MessageList
 						orphans={orphans}
@@ -331,7 +352,7 @@ export function App() {
 			</div>
 
 			{/* Footer: prompt input + toolbar */}
-			<footer className="shrink-0 px-3 pt-2 pb-2.5 bg-oc-bg">
+			<footer className={footerStyle}>
 				<PromptInput
 					prompt={prompt}
 					streaming={appState.streaming}

@@ -1,23 +1,69 @@
+import { css } from "@linaria/core";
 import { Folder, GitBranch, Pencil } from "lucide-react";
+
+const emptyRoot = css`
+	flex: 1 1 0%;
+	display: flex;
+	flex-direction: column;
+	justify-content: flex-end;
+	padding: 24px 20px 32px;
+`;
+
+const heading = css`
+	font-size: 1.5rem;
+	line-height: 2rem;
+	font-weight: 300;
+	color: var(--color-oc-fg-faint);
+	margin-bottom: 20px;
+`;
+
+const infoList = css`
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+`;
+
+const infoRow = css`
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	font-size: 0.875rem;
+	line-height: 1.25rem;
+	color: var(--color-oc-fg-muted);
+	& svg {
+		color: var(--color-oc-fg-faint);
+		flex-shrink: 0;
+	}
+	& strong {
+		color: var(--color-oc-fg);
+		font-weight: 600;
+	}
+`;
+
+const truncated = css`
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+`;
 
 export function EmptyState({ cwd }: { cwd?: string }) {
 	return (
-		<div className="flex-1 flex flex-col justify-end px-5 pt-6 pb-8">
-			<h2 className="text-2xl font-light text-oc-fg-faint mb-5">New session</h2>
-			<div className="flex flex-col gap-2.5">
+		<div className={emptyRoot}>
+			<h2 className={heading}>New session</h2>
+			<div className={infoList}>
 				{cwd ? (
-					<div className="flex items-center gap-3 text-sm text-oc-fg-muted [&_svg]:text-oc-fg-faint [&_svg]:shrink-0 [&_strong]:text-oc-fg [&_strong]:font-semibold">
+					<div className={infoRow}>
 						<Folder size={16} />
-						<span className="truncate">
+						<span className={truncated}>
 							{cwd.replace(/\/[^/]+$/, "/")}<strong>{cwd.split("/").pop()}</strong>
 						</span>
 					</div>
 				) : null}
-				<div className="flex items-center gap-3 text-sm text-oc-fg-muted [&_svg]:text-oc-fg-faint [&_svg]:shrink-0 [&_strong]:text-oc-fg [&_strong]:font-semibold">
+				<div className={infoRow}>
 					<GitBranch size={16} />
 					<span>Main branch (dev)</span>
 				</div>
-				<div className="flex items-center gap-3 text-sm text-oc-fg-muted [&_svg]:text-oc-fg-faint [&_svg]:shrink-0 [&_strong]:text-oc-fg [&_strong]:font-semibold">
+				<div className={infoRow}>
 					<Pencil size={16} />
 					<span>Last modified <strong>3 minutes ago</strong></span>
 				</div>

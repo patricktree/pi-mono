@@ -1,6 +1,70 @@
+import { css, cx } from "@linaria/core";
 import { Menu } from "lucide-react";
-import { cn } from "../lib/utils.js";
-import { SIDEBAR_ICON_BTN } from "../utils/helpers.js";
+import { sidebarIconBtn } from "../utils/helpers.js";
+
+const headerStyle = css`
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	height: 48px;
+	padding: 0 12px;
+	border-bottom: 1px solid var(--color-oc-border);
+	background-color: var(--color-oc-card);
+	flex-shrink: 0;
+`;
+
+const rightGroup = css`
+	display: flex;
+	align-items: center;
+	gap: 8px;
+`;
+
+const statusBtn = css`
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 14px;
+	border: 1px solid var(--color-oc-border);
+	border-radius: 9999px;
+	background-color: var(--color-oc-card);
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--color-oc-fg);
+	cursor: pointer;
+	&:hover {
+		background-color: var(--color-oc-muted-bg);
+	}
+`;
+
+const statusDot = css`
+	width: 8px;
+	height: 8px;
+	border-radius: 9999px;
+`;
+
+const statusDotConnected = css`
+	background-color: var(--color-oc-accent);
+`;
+
+const statusDotDisconnected = css`
+	background-color: var(--color-oc-error);
+`;
+
+const shareBtn = css`
+	display: inline-flex;
+	align-items: center;
+	padding: 6px 14px;
+	border: 1px solid var(--color-oc-border);
+	border-radius: 0.5rem;
+	background-color: var(--color-oc-card);
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--color-oc-fg);
+	cursor: pointer;
+	&:hover {
+		background-color: var(--color-oc-muted-bg);
+	}
+`;
 
 export function Header({
 	connected,
@@ -12,22 +76,22 @@ export function Header({
 	onOpenSidebar: () => void;
 }) {
 	return (
-		<header className="flex items-center justify-between h-12 px-3 border-b border-oc-border bg-oc-card shrink-0">
+		<header className={headerStyle}>
 			<button
-				className={SIDEBAR_ICON_BTN}
+				className={sidebarIconBtn}
 				onClick={onOpenSidebar}
 				type="button"
 				aria-label="Open sidebar"
 			>
 				<Menu size={18} />
 			</button>
-			<div className="flex items-center gap-2">
-				<button className="inline-flex items-center gap-2 px-3.5 py-1.5 border border-oc-border rounded-full bg-oc-card text-[13px] font-medium text-oc-fg cursor-pointer hover:bg-oc-muted-bg" type="button">
-					<span className={cn("w-2 h-2 rounded-full", connected ? "bg-oc-accent" : "bg-oc-error")} />
+			<div className={rightGroup}>
+				<button className={statusBtn} type="button">
+					<span className={cx(statusDot, connected ? statusDotConnected : statusDotDisconnected)} />
 					Status
 				</button>
 				{hasContent ? (
-					<button className="inline-flex items-center px-3.5 py-1.5 border border-oc-border rounded-lg bg-oc-card text-[13px] font-medium text-oc-fg cursor-pointer hover:bg-oc-muted-bg" type="button">
+					<button className={shareBtn} type="button">
 						Share
 					</button>
 				) : null}

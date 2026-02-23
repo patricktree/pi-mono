@@ -1,3 +1,4 @@
+import { css } from "@linaria/core";
 import type { UiMessage } from "../state/store.js";
 
 const LOG_PREFIX = "[pi-web]";
@@ -106,10 +107,58 @@ export function deriveSessionTitle(messages: UiMessage[]): string | undefined {
 	return undefined;
 }
 
-/** Reusable class strings for repeated button patterns. */
-export const SIDEBAR_ICON_BTN =
-	"inline-flex items-center justify-center w-9 h-9 rounded-lg text-oc-fg-muted cursor-pointer hover:bg-oc-muted-bg hover:text-oc-fg";
-export const ICON_BTN =
-	"inline-flex items-center justify-center w-8 h-8 rounded-md text-oc-fg-muted cursor-pointer shrink-0 hover:bg-oc-muted-bg hover:text-oc-fg disabled:opacity-40 disabled:cursor-default";
-export const TOOLBAR_ITEM =
-	"inline-flex items-center gap-1 py-1 px-2.5 rounded-md text-[13px] font-medium text-oc-fg-muted cursor-pointer whitespace-nowrap hover:text-oc-fg hover:bg-oc-muted-bg [&_svg]:shrink-0";
+/** Reusable style classes for repeated button patterns. */
+export const sidebarIconBtn = css`
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 36px;
+	height: 36px;
+	border-radius: 0.5rem;
+	color: var(--color-oc-fg-muted);
+	cursor: pointer;
+	&:hover {
+		background-color: var(--color-oc-muted-bg);
+		color: var(--color-oc-fg);
+	}
+`;
+
+export const iconBtn = css`
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	border-radius: 0.375rem;
+	color: var(--color-oc-fg-muted);
+	cursor: pointer;
+	flex-shrink: 0;
+	&:hover {
+		background-color: var(--color-oc-muted-bg);
+		color: var(--color-oc-fg);
+	}
+	&:disabled {
+		opacity: 0.4;
+		cursor: default;
+	}
+`;
+
+export const toolbarItem = css`
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 4px 10px;
+	border-radius: 0.375rem;
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--color-oc-fg-muted);
+	cursor: pointer;
+	white-space: nowrap;
+	&:hover {
+		color: var(--color-oc-fg);
+		background-color: var(--color-oc-muted-bg);
+	}
+	& svg {
+		flex-shrink: 0;
+	}
+`;

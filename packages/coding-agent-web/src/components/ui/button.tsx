@@ -1,44 +1,108 @@
+import { css, cx } from "@linaria/core";
 import { Slot } from "@radix-ui/react-slot";
-import { cva, type VariantProps } from "class-variance-authority";
 import type { ButtonHTMLAttributes } from "react";
-import { cn } from "../../lib/utils.js";
 
-const buttonVariants = cva(
-	"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
-	{
-		variants: {
-			variant: {
-				default: "bg-primary text-primary-foreground shadow-xs hover:bg-primary/90",
-				destructive: "bg-destructive text-white shadow-xs hover:bg-destructive/90",
-				outline: "border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground",
-				secondary: "bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/80",
-				ghost: "hover:bg-accent hover:text-accent-foreground",
-				link: "text-primary underline-offset-4 hover:underline",
-			},
-			size: {
-				default: "h-9 px-4 py-2",
-				sm: "h-8 rounded-md px-3 text-xs",
-				lg: "h-10 rounded-md px-6",
-				icon: "size-9",
-			},
-		},
-		defaultVariants: {
-			variant: "default",
-			size: "default",
-		},
-	},
-);
+const base = css`
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	white-space: nowrap;
+	font-weight: 500;
+	transition: color 150ms, background-color 150ms, border-color 150ms;
+	&:disabled {
+		pointer-events: none;
+		opacity: 0.5;
+	}
+	& svg {
+		pointer-events: none;
+		flex-shrink: 0;
+	}
+`;
 
-export interface ButtonProps
-	extends ButtonHTMLAttributes<HTMLButtonElement>,
-		VariantProps<typeof buttonVariants> {
+const variantStyles = {
+	default: css`
+		background-color: var(--color-oc-primary);
+		color: var(--color-oc-primary-fg);
+		box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+		&:hover {
+			opacity: 0.9;
+		}
+	`,
+	destructive: css`
+		background-color: var(--color-oc-error);
+		color: white;
+		box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+		&:hover {
+			opacity: 0.9;
+		}
+	`,
+	outline: css`
+		border: 1px solid var(--color-oc-border);
+		background-color: var(--color-oc-card);
+		box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+		&:hover {
+			background-color: var(--color-oc-muted-bg);
+		}
+	`,
+	secondary: css`
+		background-color: var(--color-oc-muted-bg);
+		color: var(--color-oc-fg);
+		box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+		&:hover {
+			opacity: 0.8;
+		}
+	`,
+	ghost: css`
+		&:hover {
+			background-color: var(--color-oc-muted-bg);
+		}
+	`,
+	link: css`
+		color: var(--color-oc-primary);
+		text-underline-offset: 4px;
+		&:hover {
+			text-decoration: underline;
+		}
+	`,
+};
+
+const sizeStyles = {
+	default: css`
+		height: 36px;
+		padding: 8px 16px;
+		border-radius: 0.375rem;
+		font-size: 0.875rem;
+	`,
+	sm: css`
+		height: 32px;
+		padding: 0 12px;
+		border-radius: 0.375rem;
+		font-size: 0.75rem;
+	`,
+	lg: css`
+		height: 40px;
+		padding: 0 24px;
+		border-radius: 0.375rem;
+		font-size: 0.875rem;
+	`,
+	icon: css`
+		width: 36px;
+		height: 36px;
+		border-radius: 0.375rem;
+	`,
+};
+
+type Variant = keyof typeof variantStyles;
+type Size = keyof typeof sizeStyles;
+
+export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+	variant?: Variant;
+	size?: Size;
 	asChild?: boolean;
 }
 
-export function Button({ className, variant, size, asChild = false, ...props }: ButtonProps) {
+export function Button({ className, variant = "default", size = "default", asChild = false, ...props }: ButtonProps) {
 	const Comp = asChild ? Slot : "button";
-
-	return <Comp className={cn(buttonVariants({ variant, size, className }))} {...props} />;
+	return <Comp className={cx(base, variantStyles[variant], sizeStyles[size], className)} {...props} />;
 }
-
-export { buttonVariants };

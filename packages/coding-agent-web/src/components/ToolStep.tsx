@@ -1,6 +1,85 @@
+import { css } from "@linaria/core";
 import { ChevronDown, LoaderCircle } from "lucide-react";
 import type { ToolStepData, UiMessage } from "../state/store.js";
 import { Markdown } from "./Markdown.js";
+
+const toolText = css`
+	font-size: 13px;
+`;
+
+const errorText = css`
+	font-size: 13px;
+	color: var(--color-oc-error);
+`;
+
+const systemText = css`
+	font-size: 0.75rem;
+	line-height: 1rem;
+	color: var(--color-oc-fg-muted);
+`;
+
+const toolStepRoot = css`
+	display: flex;
+	flex-direction: column;
+`;
+
+const toolStepBtn = css`
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	text-align: left;
+	font-size: 0.875rem;
+	line-height: 1.25rem;
+	color: var(--color-oc-fg-muted);
+	cursor: pointer;
+	&:hover {
+		color: var(--color-oc-fg);
+	}
+`;
+
+const toolLabel = css`
+	font-weight: 600;
+	color: var(--color-oc-fg);
+	flex-shrink: 0;
+`;
+
+const toolDesc = css`
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	min-width: 0;
+`;
+
+const spinIcon = css`
+	animation: spin 1s linear infinite;
+	flex-shrink: 0;
+`;
+
+const chevronIcon = css`
+	color: var(--color-oc-fg-faint);
+	flex-shrink: 0;
+	transition: transform 150ms;
+`;
+
+const expandedContent = css`
+	margin-top: 8px;
+`;
+
+const codeBlock = css`
+	display: block;
+	padding: 12px 16px;
+	border: 1px solid var(--color-oc-border);
+	border-radius: var(--radius-oc);
+	background-color: var(--color-oc-card);
+	font-family: var(--font-mono);
+	font-size: 13px;
+	line-height: normal;
+	overflow-x: auto;
+	white-space: pre-wrap;
+	word-break: break-all;
+	margin: 0;
+	color: var(--color-oc-fg);
+`;
 
 export function renderStep(
 	message: UiMessage,
@@ -14,16 +93,16 @@ export function renderStep(
 			return message.toolStep ? (
 				<ToolStep step={message.toolStep} messageId={message.id} expandedTools={expandedTools} setExpandedTools={setExpandedTools} />
 			) : (
-				<p className="text-[13px]">{message.text}</p>
+				<p className={toolText}>{message.text}</p>
 			);
 		case "error":
-			return <p className="text-[13px] text-oc-error">{message.text}</p>;
+			return <p className={errorText}>{message.text}</p>;
 		case "system":
-			return <p className="text-xs text-oc-fg-muted">{message.text}</p>;
+			return <p className={systemText}>{message.text}</p>;
 		case "assistant":
 			return <Markdown text={message.text} />;
 		default:
-			return <p className="text-[13px]">{message.text}</p>;
+			return <p className={toolText}>{message.text}</p>;
 	}
 }
 
@@ -39,13 +118,13 @@ function ToolStep({
 	setExpandedTools: React.Dispatch<React.SetStateAction<Set<string>>>;
 }) {
 	const isExpanded = expandedTools.has(messageId);
-	const toolLabel = getToolLabel(step.toolName);
+	const toolLabelText = getToolLabel(step.toolName);
 	const toolDescription = getToolDescription(step);
 
 	return (
-		<div className="flex flex-col">
+		<div className={toolStepRoot}>
 			<button
-				className="flex items-center gap-2 text-left text-sm text-oc-fg-muted cursor-pointer hover:text-oc-fg"
+				className={toolStepBtn}
 				onClick={() => {
 					setExpandedTools((prev) => {
 						const next = new Set(prev);
@@ -59,18 +138,18 @@ function ToolStep({
 				}}
 				type="button"
 			>
-				<span className="font-semibold text-oc-fg shrink-0">{toolLabel}</span>
-				<span className="truncate min-w-0">{toolDescription}</span>
+				<span className={toolLabel}>{toolLabelText}</span>
+				<span className={toolDesc}>{toolDescription}</span>
 				{step.phase === "running" ? (
-					<LoaderCircle size={14} className="animate-spin shrink-0" />
+					<LoaderCircle size={14} className={spinIcon} />
 				) : null}
 				{isExpanded ? (
-					<ChevronDown size={14} className="text-oc-fg-faint shrink-0 transition-transform duration-150" />
+					<ChevronDown size={14} className={chevronIcon} />
 				) : null}
 			</button>
 			{isExpanded ? (
-				<div className="mt-2">
-					<pre className="block px-4 py-3 border border-oc-border rounded-oc bg-oc-card font-mono text-[13px] leading-normal overflow-x-auto whitespace-pre-wrap break-all m-0 text-oc-fg">
+				<div className={expandedContent}>
+					<pre className={codeBlock}>
 						<code>{formatToolCall(step)}</code>
 						{step.result ? (
 							<>

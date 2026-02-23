@@ -1,26 +1,42 @@
-import { cva, type VariantProps } from "class-variance-authority";
+import { css, cx } from "@linaria/core";
 import type { HTMLAttributes } from "react";
-import { cn } from "../../lib/utils.js";
 
-const badgeVariants = cva(
-	"inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold transition-colors",
-	{
-		variants: {
-			variant: {
-				default: "border-transparent bg-primary text-primary-foreground",
-				secondary: "border-transparent bg-secondary text-secondary-foreground",
-				destructive: "border-transparent bg-destructive text-white",
-				outline: "text-foreground",
-			},
-		},
-		defaultVariants: {
-			variant: "default",
-		},
-	},
-);
+const base = css`
+	display: inline-flex;
+	align-items: center;
+	border-radius: 0.375rem;
+	border: 1px solid transparent;
+	padding: 2px 10px;
+	font-size: 0.75rem;
+	font-weight: 600;
+	transition: color 150ms, background-color 150ms, border-color 150ms;
+`;
 
-export interface BadgeProps extends HTMLAttributes<HTMLDivElement>, VariantProps<typeof badgeVariants> {}
+const variantStyles = {
+	default: css`
+		background-color: var(--color-oc-primary);
+		color: var(--color-oc-primary-fg);
+	`,
+	secondary: css`
+		background-color: var(--color-oc-muted-bg);
+		color: var(--color-oc-fg);
+	`,
+	destructive: css`
+		background-color: var(--color-oc-error);
+		color: white;
+	`,
+	outline: css`
+		border-color: var(--color-oc-border);
+		color: var(--color-oc-fg);
+	`,
+};
 
-export function Badge({ className, variant, ...props }: BadgeProps) {
-	return <div className={cn(badgeVariants({ variant }), className)} {...props} />;
+type Variant = keyof typeof variantStyles;
+
+export interface BadgeProps extends HTMLAttributes<HTMLDivElement> {
+	variant?: Variant;
+}
+
+export function Badge({ className, variant = "default", ...props }: BadgeProps) {
+	return <div className={cx(base, variantStyles[variant], className)} {...props} />;
 }

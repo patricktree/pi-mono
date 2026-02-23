@@ -1,8 +1,160 @@
+import { css, cx } from "@linaria/core";
 import { Plus, Square, X } from "lucide-react";
 import { useCallback, useEffect, useRef } from "react";
-import { cn } from "../lib/utils.js";
 import type { ImageContent } from "../protocol/types.js";
-import { ICON_BTN, isTouchDevice, readFileAsBase64, warn } from "../utils/helpers.js";
+import { iconBtn, isTouchDevice, readFileAsBase64, warn } from "../utils/helpers.js";
+
+const inputWrapper = css`
+	border: 1px solid var(--color-oc-border);
+	border-radius: var(--radius-oc);
+	background-color: var(--color-oc-card);
+	overflow: hidden;
+	position: relative;
+`;
+
+const hiddenInput = css`
+	display: none;
+`;
+
+const imagePreviewRow = css`
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	padding: 12px 16px 0;
+`;
+
+const imageThumb = css`
+	position: relative;
+	width: 48px;
+	height: 48px;
+	overflow: hidden;
+	border-radius: 0.375rem;
+	border: 1px solid var(--color-oc-border);
+`;
+
+const imageThumbImg = css`
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+`;
+
+const removeImageBtn = css`
+	position: absolute;
+	top: 2px;
+	right: 2px;
+	width: 16px;
+	height: 16px;
+	border-radius: 9999px;
+	background-color: rgba(0, 0, 0, 0.6);
+	color: white;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+`;
+
+const textareaStyle = css`
+	display: block;
+	width: 100%;
+	min-height: 44px;
+	max-height: 200px;
+	padding: 12px 16px 4px;
+	background-color: transparent;
+	outline: none;
+	resize: none;
+	font-size: 15px;
+	line-height: normal;
+	color: var(--color-oc-fg);
+	border: none;
+	&::placeholder {
+		color: var(--color-oc-fg-faint);
+	}
+	&:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+`;
+
+const stopOverlay = css`
+	position: absolute;
+	top: 8px;
+	right: 8px;
+	z-index: 1;
+`;
+
+const stopBtn = css`
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 12px;
+	border: 1px solid var(--color-oc-border);
+	border-radius: 0.5rem;
+	background-color: var(--color-oc-card);
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--color-oc-fg);
+	cursor: pointer;
+`;
+
+const stopKbd = css`
+	font-size: 11px;
+	padding: 1px 5px;
+	background-color: var(--color-oc-muted-bg);
+	border-radius: 0.25rem;
+	color: var(--color-oc-fg-muted);
+	font-weight: 600;
+`;
+
+const bottomRow = css`
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	padding: 4px 8px 8px;
+	gap: 4px;
+`;
+
+const actionGroup = css`
+	display: flex;
+	align-items: center;
+	gap: 4px;
+`;
+
+const squareBtn = css`
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 34px;
+	height: 34px;
+	border-radius: 0.5rem;
+	background-color: var(--color-oc-primary);
+	color: white;
+	cursor: pointer;
+	flex-shrink: 0;
+`;
+
+const sendBtn = css`
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 34px;
+	height: 34px;
+	border-radius: 0.5rem;
+	color: white;
+	cursor: pointer;
+	flex-shrink: 0;
+	&:disabled {
+		opacity: 0.4;
+		cursor: default;
+	}
+`;
+
+const sendBtnActive = css`
+	background-color: var(--color-oc-primary);
+`;
+
+const sendBtnInactive = css`
+	background-color: var(--color-oc-fg-faint);
+`;
 
 export function PromptInput({
 	prompt,
@@ -81,11 +233,13 @@ export function PromptInput({
 		event.currentTarget.value = "";
 	}, [onAddImages, onError]);
 
+	const hasPromptContent = prompt.trim() || pendingImages.length > 0;
+
 	return (
-		<div className="border border-oc-border rounded-oc bg-oc-card overflow-hidden relative">
+		<div className={inputWrapper}>
 			<input
 				accept="image/*"
-				className="hidden"
+				className={hiddenInput}
 				id="image-attachments"
 				multiple
 				name="imageAttachments"
@@ -97,16 +251,16 @@ export function PromptInput({
 			/>
 
 			{pendingImages.length > 0 ? (
-				<div className="flex flex-wrap gap-2 px-4 pt-3">
+				<div className={imagePreviewRow}>
 					{pendingImages.map((image, index) => (
-						<div className="relative w-12 h-12 overflow-hidden rounded-md border border-oc-border" key={`${index.toString()}-${image.mimeType}`}>
+						<div className={imageThumb} key={`${index.toString()}-${image.mimeType}`}>
 							<img
 								alt="pending"
 								src={`data:${image.mimeType};base64,${image.data}`}
-								className="w-full h-full object-cover"
+								className={imageThumbImg}
 							/>
 							<button
-								className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-black/60 text-white flex items-center justify-center cursor-pointer"
+								className={removeImageBtn}
 								onClick={() => onRemoveImage(index)}
 								type="button"
 							>
@@ -118,7 +272,7 @@ export function PromptInput({
 			) : null}
 
 			<textarea
-				className="block w-full min-h-[44px] max-h-[200px] pt-3 px-4 pb-1 bg-transparent outline-none resize-none text-[15px] leading-normal text-oc-fg placeholder:text-oc-fg-faint disabled:opacity-50 disabled:cursor-not-allowed"
+				className={textareaStyle}
 				disabled={streaming || !connected}
 				onChange={(event) => onPromptChange(event.currentTarget.value)}
 				onKeyDown={onPromptKeyDown}
@@ -129,22 +283,22 @@ export function PromptInput({
 			/>
 
 			{streaming ? (
-				<div className="absolute top-2 right-2 z-[1]">
+				<div className={stopOverlay}>
 					<button
-						className="inline-flex items-center gap-1.5 py-1.5 px-3 border border-oc-border rounded-lg bg-oc-card text-[13px] font-medium text-oc-fg cursor-pointer"
+						className={stopBtn}
 						onClick={onAbort}
 						type="button"
 					>
 						Stop
-						<span className="text-[11px] py-px px-[5px] bg-oc-muted-bg rounded text-oc-fg-muted font-semibold">ESC</span>
+						<span className={stopKbd}>ESC</span>
 					</button>
 				</div>
 			) : null}
 
-			<div className="flex items-center justify-end px-2 pt-1 pb-2 gap-1">
-				<div className="flex items-center gap-1">
+			<div className={bottomRow}>
+				<div className={actionGroup}>
 					<button
-						className={ICON_BTN}
+						className={iconBtn}
 						disabled={streaming || !connected}
 						onClick={onAttachImage}
 						type="button"
@@ -154,7 +308,7 @@ export function PromptInput({
 					</button>
 					{streaming ? (
 						<button
-							className="inline-flex items-center justify-center w-[34px] h-[34px] rounded-lg bg-oc-primary text-white cursor-pointer shrink-0"
+							className={squareBtn}
 							onClick={onAbort}
 							type="button"
 						>
@@ -162,11 +316,8 @@ export function PromptInput({
 						</button>
 					) : (
 						<button
-							className={cn(
-								"inline-flex items-center justify-center w-[34px] h-[34px] rounded-lg text-white cursor-pointer shrink-0 disabled:opacity-40 disabled:cursor-default",
-								prompt.trim() || pendingImages.length > 0 ? "bg-oc-primary" : "bg-oc-fg-faint",
-							)}
-							disabled={!connected || (!prompt.trim() && pendingImages.length === 0)}
+							className={cx(sendBtn, hasPromptContent ? sendBtnActive : sendBtnInactive)}
+							disabled={!connected || !hasPromptContent}
 							onClick={onSend}
 							type="button"
 							aria-label="Send"
