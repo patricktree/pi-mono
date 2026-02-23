@@ -1,149 +1,117 @@
 # UI
 
-The entire frontend is a single Lit web component (`<pi-web-app>`) defined in `src/ui/pi-web-app.ts`. It subscribes to `AppStore` and re-renders on every state change.
+The frontend UI is implemented in `src/App.tsx` as a React component tree styled with Tailwind CSS and a small set of shadcn/ui-style primitives.
 
-## Layout
+## High-level layout
 
 ```text
 ┌─────────────────────────────────────────┐
-│ [≡]  pi                    ● Connected  │  ← Header
+│ [≡] pi                        ● Status  │  Header
 ├─────────────────────────────────────────┤
 │                                         │
-│  ┌─────────────────────────────────┐    │
-│  │ User message                    │    │  ← Turn
-│  └─────────────────────────────────┘    │
-│  ▸ 3 steps                              │  ← Collapsible tool steps
-│    ├ thinking (italic, muted)           │
-│    ├ read("README.md") ✓ Done           │  ← Tool step with status
-│    └ bash("ls") ✓ Done                  │
+│  User bubble                            │
+│  └─ Collapsible steps                   │
+│     ├─ thinking                         │
+│     ├─ tool call + status               │
+│     └─ tool result preview              │
 │                                         │
-│  Assistant response with **markdown**   │  ← Rendered markdown
+│  Assistant markdown response            │
 │                                         │
-│                                 ← scroll │  ← Scrollable message area
 ├─────────────────────────────────────────┤
-│ ┌─────────────────────────────────────┐ │
-│ │ Type a message...                   │ │  ← Prompt input
-│ │                          ◔  [Send] │ │  ← Context ring + send button
-│ └─────────────────────────────────────┘ │  ← Prompt dock (sticky bottom)
+│ Prompt textarea + context ring + send   │  Sticky footer dock
 └─────────────────────────────────────────┘
 ```
 
-### Sidebar (Session List)
+## Component composition
 
-The sidebar slides in from the left when the hamburger button is clicked:
+- `App.tsx` — orchestration, rendering, and behavior
+- `components/ui/button.tsx` — variant-based button primitive
+- `components/ui/badge.tsx` — compact badge primitive
+- `components/ui/textarea.tsx` — textarea primitive
+- `index.css` — Tailwind + design tokens + markdown defaults
 
-```text
-┌──────────┬──────────────────────────────┐
-│ pi       │                              │
-│          │  (backdrop overlay)          │
-│ [+ New]  │                              │
-│          │                              │
-│ ● Auth   │                              │
-│   refac. │                              │
-│   ~/proj │                              │
-│   12 msg │                              │
-│          │                              │
-│   CI fix │                              │
-│   ~/proj │                              │
-│   8 msg  │                              │
-└──────────┴──────────────────────────────┘
-```
+## Sidebar (sessions)
 
-Sessions are sorted by last modified date (newest first). The active session is highlighted. Clicking a session switches to it and loads its message history.
+A slide-in left sidebar contains:
 
-## Turn-Based Grouping
+- new-session action
+- session list sorted by modification time
+- current session highlight
+- per-session metadata (cwd, message count, relative age)
 
-Messages are grouped into turns for display. Each user message starts a new turn containing all subsequent assistant responses, tool steps, thinking blocks, errors, and system messages until the next user message.
+The sidebar is controlled through app state and closed by selecting a session or clicking the backdrop.
 
-Within a turn:
+## Message rendering model
 
-1. **User message** — Displayed in a rounded card with a muted background
-2. **Tool steps** — Collapsible section showing thinking blocks and tool invocations
-3. **Error messages** — Red text (from failed commands or extension errors)
-4. **Assistant text** — Rendered as markdown with full formatting support
-5. **System messages** — Small muted text (extension notifications)
+Messages are shown in turns:
 
-### Collapsible Steps
+1. User message bubble
+2. Optional collapsible tool/thinking steps
+3. Error/system messages
+4. Assistant markdown output
 
-Tool steps and thinking blocks are grouped under a collapsible toggle ("3 steps"). The toggle shows/hides the step details. Steps are rendered inside a left-bordered container.
+The latest active turn shows streaming indicators while generation is in progress.
 
-## Streaming Indicators
+## Tool step UI
 
-During streaming:
+Tool calls render with structured status:
 
-- A blinking blue dot appears after the last assistant text (or as "Thinking●" if no text yet)
-- Tool steps show animated status icons:
-  - `···` — Calling (tool call received, not yet executing)
-  - Spinning circle — Running
-  - Green checkmark — Done
-  - Red X — Error
+- `calling` (ellipsis)
+- `running` (spinner)
+- `done` (check)
+- `error` (x)
 
-## Markdown Rendering
+For completed/error states, a truncated result preview is shown.
 
-Assistant messages are rendered as HTML via [marked](https://github.com/markedjs/marked) with GFM (GitHub Flavored Markdown) enabled. Supported elements:
+## Markdown rendering
 
-- Headings (h1–h6)
-- Bold, italic, strikethrough
-- Inline code and fenced code blocks
-- Ordered and unordered lists
-- Links (underlined, blue)
-- Blockquotes
-- Horizontal rules
-- Tables
+Assistant content is rendered by:
 
-Code blocks use the `IBM Plex Mono` font. No syntax highlighting is applied.
+1. `marked` (GitHub-flavored markdown)
+2. `DOMPurify` sanitization
+3. React `dangerouslySetInnerHTML`
 
-## Context Usage Indicator
+Styling in `index.css` covers headings, lists, code blocks, tables, links, and blockquotes.
 
-A small circular progress ring in the prompt toolbar shows how much of the model's context window has been consumed. It appears to the left of the Send button once usage data is available.
+## Prompt dock behavior
 
-- **Color**: Grey by default, shifts to orange at ≥50% usage and red at ≥80%
-- **Tooltip**: Hovering reveals a tooltip with the exact token count and percentage (e.g., "42k / 200k tokens (21%)")
-- **Refresh**: The indicator is fetched on initial connect and after every agent turn completes (`agent_end` event)
-- **Hidden**: The ring is hidden until the first `get_context_usage` response arrives
+The sticky prompt dock includes:
 
-## Prompt Input
+- auto-growing textarea (`max-height: 200px`)
+- image attachment button + file picker
+- context usage ring
+- send / stop controls
 
-The prompt area is a `<textarea>` that auto-resizes up to 200px height. Keyboard behavior:
+Keyboard behavior:
 
-| Key         | Desktop        | Mobile (touch) |
-| ----------- | -------------- | -------------- |
-| Enter       | Send message   | Insert newline |
-| Shift+Enter | Insert newline | Insert newline |
-| Send button | Send message   | Send message   |
+- desktop: `Enter` sends, `Shift+Enter` inserts newline
+- touch devices: `Enter` inserts newline; send via button
 
-On touch devices (`ontouchstart` in window or `maxTouchPoints > 0`), Enter always inserts a newline to accommodate on-screen keyboards. Users tap the Send button instead.
+## Image attachments
 
-During streaming, the prompt is disabled and a "Stop" button replaces the Send button.
+- accepts `image/*`
+- validates max size (20 MB per file)
+- previews pending thumbnails
+- supports removing individual pending images
+- sends base64 image payloads with prompt command
 
-## Session Auto-Resume
+## Connection and session UX
 
-On initial connection:
+On connect, the app:
 
-1. Fetch current state (`get_state`) and session list (`list_sessions`) in parallel
-2. Find the most recently modified session
-3. If it differs from the current session, switch to it
-4. Load the session's message history (`get_messages`)
+1. fetches current state + sessions
+2. resumes most recently modified session
+3. hydrates message history
+4. fetches context usage
 
-This ensures the web UI resumes where the user left off.
+Session changes (`new`, `switch`, etc.) refresh both current session metadata and session list.
 
-## Extension UI Bridging
+## Extension UI bridge behavior
 
-The web frontend bridges extension UI requests from the backend to browser-native dialogs:
+Supported extension UI request methods:
 
-| Extension Method              | Browser Implementation        |
-| ----------------------------- | ----------------------------- |
-| `confirm`                     | `window.confirm()`            |
-| `input` / `editor` / `select` | `window.prompt()`             |
-| `notify`                      | Displayed as a system message |
-| `set_editor_text`             | Displayed as a system message |
+- `confirm` → browser confirm dialog
+- `input`, `editor`, `select` → browser prompt dialog
+- `notify`, `set_editor_text` → system messages in chat
 
-Responses are sent back via `sendExtensionUiResponse()`. Cancellation (closing the dialog) sends `{ cancelled: true }`.
-
-## Responsive Design
-
-The layout adapts to narrow screens (< 600px):
-
-- Content padding reduces from 24px to 16px
-- Turn gaps reduce from 32px to 24px
-- Sidebar width is capped at 85vw
+Responses are sent back using `extension_ui_response` payloads.
