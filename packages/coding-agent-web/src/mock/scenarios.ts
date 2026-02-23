@@ -806,6 +806,119 @@ const interleavedScenario: Scenario = {
 };
 
 // ---------------------------------------------------------------------------
+// In-progress scenario: pauses mid-stream so the streaming dot is visible
+// ---------------------------------------------------------------------------
+
+const IN_PROGRESS_TEXT = "Let me check the configuration files.";
+
+const inProgressScenario: Scenario = {
+	autoPrompt: "Check the project config",
+	preload: [],
+	steps: [
+		{ delay: 100, event: { type: "agent_start" } },
+		// Text before tool calls
+		{
+			delay: 50,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: { type: "text_start" },
+			},
+		},
+		...textDeltas(IN_PROGRESS_TEXT, 8, 20),
+		{
+			delay: 20,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: { type: "text_end", content: IN_PROGRESS_TEXT },
+			},
+		},
+		// Tool call 1: completed
+		{
+			delay: 50,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: { type: "toolcall_start" },
+			},
+		},
+		{
+			delay: 80,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: {
+					type: "toolcall_end",
+					toolCall: { type: "toolCall", id: "tc_ip_1", name: "read", arguments: { path: "package.json" } },
+				},
+			},
+		},
+		{
+			delay: 50,
+			event: {
+				type: "message_end",
+				message: {
+					role: "assistant",
+					content: [
+						{ type: "text", text: IN_PROGRESS_TEXT },
+						{ type: "toolCall", id: "tc_ip_1", name: "read", arguments: { path: "package.json" } },
+					],
+					timestamp: Date.now(),
+				},
+			},
+		},
+		{ delay: 50, event: { type: "tool_execution_start", toolName: "read" } },
+		{
+			delay: 300,
+			event: {
+				type: "tool_execution_end",
+				toolName: "read",
+				result: {
+					content: [{ type: "text", text: '{"name":"my-project","version":"1.0.0"}' }],
+				},
+				isError: false,
+			},
+		},
+		// Tool call 2: stays in "running" phase — never completes
+		{
+			delay: 100,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: { type: "toolcall_start" },
+			},
+		},
+		{
+			delay: 80,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: {
+					type: "toolcall_end",
+					toolCall: { type: "toolCall", id: "tc_ip_2", name: "bash", arguments: { command: "npm run check" } },
+				},
+			},
+		},
+		{ delay: 50, event: { type: "tool_execution_start", toolName: "bash" } },
+		// No tool_execution_end, no agent_end — stays in streaming state
+	],
+};
+
+// ---------------------------------------------------------------------------
+// Thinking scenario: agent started but no output yet, just the streaming dot
+// ---------------------------------------------------------------------------
+
+const thinkingScenario: Scenario = {
+	autoPrompt: "What is this project?",
+	preload: [],
+	steps: [
+		{ delay: 100, event: { type: "agent_start" } },
+		// No further events — stays in streaming state with no output
+	],
+};
+
+// ---------------------------------------------------------------------------
 // Registry
 // ---------------------------------------------------------------------------
 
@@ -816,4 +929,6 @@ export const SCENARIOS: Record<string, Scenario> = {
 	"multi-tool": multiToolScenario,
 	long: longScenario,
 	interleaved: interleavedScenario,
+	"in-progress": inProgressScenario,
+	thinking: thinkingScenario,
 };

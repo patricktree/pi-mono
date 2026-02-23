@@ -23,12 +23,6 @@ const turnWrap = css`
 	padding: 0 16px 20px;
 `;
 
-const thinkingText = css`
-	font-size: 0.875rem;
-	line-height: 1.25rem;
-	color: var(--color-oc-fg-muted);
-`;
-
 const assistantText = css`
 	font-size: 0.875rem;
 	line-height: 1.25rem;
@@ -80,23 +74,27 @@ export function MessageList({
 					{turns.map((turn) => {
 						const isLatestTurn = turn.user.id === latestUserId;
 						const hasOutput = turn.steps.some((s) => s.kind === "assistant" || s.kind === "error" || s.kind === "tool");
+						const visibleSteps = turn.steps.filter((s) => s.kind !== "thinking");
+						const lastVisibleStep = visibleSteps.at(-1);
+						const showTrailingDot = streaming && isLatestTurn && lastVisibleStep !== undefined && lastVisibleStep.kind !== "assistant";
 
 						return (
 							<div className={turnWrap} key={turn.user.id}>
 								<UserBubble message={turn.user} />
 
-								{/* Thinking indicator - only show during streaming when no other output yet */}
+								{/* Streaming dot before any output appears */}
 								{streaming && isLatestTurn && !hasOutput ? (
-									<p className={thinkingText}>Thinking</p>
+									<span className={cursorDot} />
 								) : null}
 
 								{/* Steps rendered in original order to preserve interleaving */}
 								{turn.steps.map((message) => {
 									if (message.kind === "assistant") {
+										const isLastVisible = message.id === lastVisibleStep?.id;
 										return (
 											<div className={assistantText} key={message.id}>
 												<Markdown text={message.text} />
-												{streaming && isLatestTurn && message.id === turn.steps.filter((s) => s.kind === "assistant").at(-1)?.id ? (
+												{streaming && isLatestTurn && isLastVisible ? (
 													<span className={cursorDot} />
 												) : null}
 											</div>
@@ -111,6 +109,9 @@ export function MessageList({
 										</div>
 									);
 								})}
+
+								{/* Streaming dot after non-text steps (e.g. tool calls) */}
+								{showTrailingDot ? <span className={cursorDot} /> : null}
 							</div>
 						);
 					})}
