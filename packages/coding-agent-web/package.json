@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:mock": "vite --open /?mock=default",
     "build": "vite build",
     "preview": "vite preview",
     "check": "biome check --write --error-on-warnings . && tsc --noEmit",

@@ -1,6 +1,6 @@
 # Architecture
 
-The web frontend is a single-page application built with React, Vite, Tailwind CSS, and shadcn/ui-style primitives. It connects to the coding-agent WebSocket server and provides a chat-like interface for agent interaction.
+The web frontend is a single-page application built with React, Vite, and [Linaria](https://github.com/callstack/linaria) (zero-runtime CSS-in-JS). It connects to the coding-agent WebSocket server and provides a chat-like interface for agent interaction.
 
 ## Package Structure
 
@@ -8,14 +8,14 @@ The web frontend is a single-page application built with React, Vite, Tailwind C
 src/
 ├── main.tsx                  Entry point, mounts <App />
 ├── App.tsx                   Root React component (layout + orchestration)
-├── index.css                 Tailwind import, design tokens, markdown/base styles
+├── index.css                 CSS reset, design tokens, markdown/base styles
 ├── components/
 │   └── ui/
 │       ├── badge.tsx         UI primitive
-│       ├── button.tsx        UI primitive (CVA variants)
+│       ├── button.tsx        UI primitive (variant classes)
 │       └── textarea.tsx      UI primitive
 ├── lib/
-│   └── utils.ts              cn() helper (clsx + tailwind-merge)
+│   └── utils.ts              cx() re-export from @linaria/core
 ├── protocol/
 │   ├── types.ts              Protocol type definitions (commands, events, messages)
 │   └── client.ts             ProtocolClient with typed RPC methods
@@ -70,7 +70,7 @@ State updates are immutable. The UI subscribes to store updates and re-renders f
 - markdown rendering (`marked`) with sanitization (`DOMPurify`)
 - responsive layout and interaction states
 
-The UI is composed from Tailwind utility classes plus a small set of reusable primitives in `src/components/ui`.
+The UI is composed from Linaria `css` tagged template literals (scoped class names extracted at build time) plus a small set of reusable primitives in `src/components/ui`.
 
 ## Data Flow
 

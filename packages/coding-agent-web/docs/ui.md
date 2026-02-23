@@ -1,6 +1,6 @@
 # UI
 
-The frontend UI is implemented in `src/App.tsx` as a React component tree styled with Tailwind CSS and a small set of shadcn/ui-style primitives.
+The frontend UI is implemented in `src/App.tsx` as a React component tree styled with [Linaria](https://github.com/callstack/linaria) `css` tagged template literals and a small set of reusable primitives.
 
 ## High-level layout
 
@@ -28,7 +28,7 @@ The frontend UI is implemented in `src/App.tsx` as a React component tree styled
 - `components/ui/button.tsx` — variant-based button primitive
 - `components/ui/badge.tsx` — compact badge primitive
 - `components/ui/textarea.tsx` — textarea primitive
-- `index.css` — Tailwind + design tokens + markdown defaults
+- `index.css` — CSS reset + design tokens + markdown defaults
 
 ## Sidebar (sessions)
 

@@ -7,13 +7,42 @@ cd packages/coding-agent-web
 npm install
 ```
 
-## Local Development
+## Dev mode with real backend
+
+Start the coding-agent backend in one terminal:
+
+```bash
+node packages/coding-agent/dist/cli.js --mode web --port 4781 --web-allowed-origin http://localhost:5173
+```
+
+Then start Vite in another terminal:
 
 ```bash
 npm run dev
 ```
 
-Starts a Vite dev server.
+Open `http://localhost:5173/`. The Vite dev server proxies `/ws` to the backend at `ws://127.0.0.1:4781`.
+
+If you use a different Vite port (e.g. `npx vite --port 5199`), pass the matching origin to the backend:
+
+```bash
+node packages/coding-agent/dist/cli.js --mode web --port 4781 --web-allowed-origin http://localhost:5199
+```
+
+## Mock mode (no backend needed)
+
+```bash
+npm run dev:mock
+```
+
+Opens the browser with `?mock=default`, which replays canned events through `MockTransport`.
+
+| URL | Scenario |
+| --- | --- |
+| `?mock` or `?mock=default` | Thinking, tool call, streamed answer |
+| `?mock=error` | Extension error mid-stream |
+| `?mock=multi-tool` | Multiple sequential tool calls |
+| `?mock=long` | Long streamed markdown response |
 
 ## Build
 
@@ -38,19 +67,6 @@ If web mode was started with `--web-token`, include it in the URL:
 http://127.0.0.1:4781/?token=<token>
 ```
 
-## Mock Mode
-
-For UI development without a running backend, append a `mock` query param:
-
-| URL | Scenario |
-| --- | --- |
-| `?mock` | Default: thinking → tool call → streamed answer |
-| `?mock=error` | Thinking → extension error mid-stream |
-| `?mock=multi-tool` | Multiple sequential tool calls |
-| `?mock=long` | Long streamed markdown response |
-
-Mock mode replays event sequences through `MockTransport` and uses hardcoded session data.
-
 ## Type Checking and Linting
 
 ```bash
@@ -64,14 +80,13 @@ Runs Biome and TypeScript (`tsc --noEmit`).
 | File | Purpose |
 | --- | --- |
 | `index.html` | HTML shell and font imports |
-| `vite.config.ts` | Vite config (React SWC + Tailwind plugin) |
+| `vite.config.ts` | Vite config (React SWC + Linaria/wyw-in-js plugin, WS proxy) |
 | `tsconfig.json` | Strict TS config, React JSX, alias paths |
-| `components.json` | shadcn/ui-style alias + Tailwind config metadata |
 | `src/main.tsx` | React entrypoint |
 | `src/App.tsx` | Root app component |
-| `src/index.css` | Tailwind + CSS variables + markdown/base styles |
+| `src/index.css` | CSS reset, design tokens, markdown/base styles |
 | `src/components/ui/*` | Reusable UI primitives |
-| `src/lib/utils.ts` | `cn()` helper |
+| `src/lib/utils.ts` | `cx()` re-export from `@linaria/core` |
 | `src/state/store.ts` | AppStore and event-to-state mapping |
 | `src/protocol/types.ts` | Shared protocol types |
 | `src/protocol/client.ts` | Typed protocol client |
@@ -86,9 +101,8 @@ Runs Biome and TypeScript (`tsc --noEmit`).
 | --- | --- |
 | `react`, `react-dom` | UI runtime |
 | `vite`, `@vitejs/plugin-react-swc` | Build/dev server |
-| `tailwindcss`, `@tailwindcss/vite` | Styling |
+| `@linaria/core`, `@wyw-in-js/vite` | Zero-runtime CSS-in-JS (build-time extraction) |
 | `@radix-ui/react-slot` | Primitive composition |
-| `class-variance-authority`, `clsx`, `tailwind-merge` | Class composition and variants |
 | `lucide-react` | Icons |
 | `marked`, `dompurify` | Markdown rendering + sanitization |
 
