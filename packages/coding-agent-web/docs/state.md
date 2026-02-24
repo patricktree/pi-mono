@@ -11,12 +11,15 @@ interface AppState {
   connected: boolean;
   streaming: boolean;
   messages: UiMessage[];
+  scheduledMessages: UiMessage[];
   sessions: SessionSummary[];
   currentSessionId: string | null;
   sidebarOpen: boolean;
   contextUsage: ContextUsage | undefined;
 }
 ```
+
+`scheduledMessages` holds steering messages that have been sent to the server but not yet interweaved into the conversation. These are displayed in a separate section between the message timeline and the prompt input.
 
 ## UI Message Model
 
@@ -70,6 +73,7 @@ Phase flow:
 | --- | --- |
 | `agent_start` | `streaming = true`, reset active stream pointers |
 | `agent_end` | `streaming = false`, reset active stream pointers |
+| `message_start` (user) | Move matching scheduled message from `scheduledMessages` to `messages` |
 | `message_update:text_delta` | Append to active assistant text message |
 | `message_update:thinking_delta` | Append to active thinking message |
 | `message_update:toolcall_end` | Create a new tool step message |
@@ -95,6 +99,12 @@ The store keeps a flat timeline (`messages`).
 - following messages belong to that turn until next user message
 
 This keeps store logic simple while allowing rich UI grouping.
+
+## Steering and Scheduled Messages
+
+When the user sends a message while the agent is streaming, it is dispatched as a steering message (`streamingBehavior: "steer"`) and added to `scheduledMessages`. When the server interweaves it into the conversation (signaled by `message_start` with a user message), the store moves the matching entry from `scheduledMessages` to `messages`.
+
+`clearScheduledMessages()` removes all scheduled messages and returns them. This is used by the dequeue action, which restores the message text into the prompt input and sends `clear_queue` to the server.
 
 ## React-local UI State
 

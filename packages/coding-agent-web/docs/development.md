@@ -43,6 +43,7 @@ Opens the browser with `?mock=default`, which replays canned events through `Moc
 | `?mock=error` | Extension error mid-stream |
 | `?mock=multi-tool` | Multiple sequential tool calls |
 | `?mock=long` | Long streamed markdown response |
+| `?mock=steering` | Long-running agent with a scheduled steering message |
 
 ## Build
 

@@ -47,12 +47,29 @@ With image attachments:
 }
 ```
 
+When the agent is already streaming, set `streamingBehavior` to queue the message:
+
+```json
+{"id":"req_3","type":"prompt","message":"Focus on auth only","streamingBehavior":"steer"}
+```
+
+- `"steer"` — interweaved at the next opportunity (after current tool execution), skips remaining tool calls
+- `"followUp"` — queued until the agent finishes the current run
+
 ### `abort`
 
 Abort active agent work.
 
 ```json
-{"id":"req_3","type":"abort"}
+{"id":"req_4","type":"abort"}
+```
+
+### `clear_queue`
+
+Clear all queued steering and follow-up messages on the server. Returns the cleared message texts.
+
+```json
+{"id":"req_5","type":"clear_queue"}
 ```
 
 ### `get_state`
@@ -121,6 +138,10 @@ Streaming deltas for assistant output.
 - `thinking_start`, `thinking_delta`, `thinking_end`
 - `toolcall_start`, `toolcall_delta`, `toolcall_end`
 - `start`, `done`, `error`
+
+### `message_start`
+
+Emitted when a message is added to the conversation. For user messages, this signals that a queued steering message has been interweaved into the conversation. The frontend uses this to move the message from the scheduled section into the main message timeline.
 
 ### `message_end`
 

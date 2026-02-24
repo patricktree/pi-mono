@@ -18,6 +18,11 @@ The frontend UI is implemented in `src/App.tsx` as a React component tree styled
 │  Assistant markdown response            │
 │                                         │
 ├─────────────────────────────────────────┤
+│ ⏱ Scheduled          ↩ Restore to editor│  Scheduled messages
+│   Dimmed user bubble                    │  (only visible when
+│                                         │   steering messages
+│                                         │   are queued)
+├─────────────────────────────────────────┤
 │ Prompt textarea + context ring + send   │  Sticky footer dock
 └─────────────────────────────────────────┘
 ```
@@ -73,6 +78,15 @@ Assistant content is rendered by:
 
 Styling in `index.css` covers headings, lists, code blocks, tables, links, and blockquotes.
 
+## Scheduled messages section
+
+When the user sends a message while the agent is streaming, it is queued as a steering message. These appear in a dedicated `ScheduledMessages` section between the message timeline and the prompt input:
+
+- Dimmed user bubbles with a "⏱ Scheduled" label
+- A "↩ Restore to editor" button that dequeues all scheduled messages, clears them from the server queue, and puts their text back into the prompt input
+
+When the server interweaves a steering message, it is moved from this section into the main message timeline.
+
 ## Prompt dock behavior
 
 The sticky prompt dock includes:
@@ -81,6 +95,8 @@ The sticky prompt dock includes:
 - image attachment button + file picker
 - context usage ring
 - send / stop controls
+
+The prompt input and attachment button remain enabled while the agent is streaming. Messages sent during streaming are dispatched as steering messages. Both the send button and the stop button are visible during streaming.
 
 Keyboard behavior:
 

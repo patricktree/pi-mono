@@ -10,6 +10,7 @@ src/
 ├── App.tsx                   Root React component (layout + orchestration)
 ├── index.css                 CSS reset, design tokens, markdown/base styles
 ├── components/
+│   ├── ScheduledMessages.tsx Scheduled steering messages section
 │   └── ui/
 │       ├── badge.tsx         UI primitive
 │       ├── button.tsx        UI primitive (variant classes)

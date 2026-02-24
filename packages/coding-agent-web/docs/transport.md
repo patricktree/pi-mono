@@ -46,6 +46,7 @@ Built-in scenarios:
 - `error`
 - `multi-tool`
 - `long`
+- `steering`
 
 It also returns mock data for RPC-style commands (`list_sessions`, `get_messages`, `get_state`, etc.) so the full UI can be exercised without a backend.
 
@@ -72,8 +73,12 @@ interface ScenarioStep {
 
 ```typescript
 class ProtocolClient {
-  prompt(message: string, images?: ImageContent[]): Promise<RpcResponse>;
+  prompt(message: string, options?: {
+    images?: ImageContent[];
+    streamingBehavior?: "steer" | "followUp";
+  }): Promise<RpcResponse>;
   abort(): Promise<RpcResponse>;
+  clearQueue(): Promise<RpcResponse>;
   listSessions(scope?: "cwd" | "all"): Promise<SessionSummary[]>;
   switchSession(sessionPath: string): Promise<void>;
   newSession(): Promise<void>;
