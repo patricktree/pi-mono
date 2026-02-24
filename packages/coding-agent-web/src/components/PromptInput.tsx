@@ -75,36 +75,6 @@ const textareaStyle = css`
 	}
 `;
 
-const stopOverlay = css`
-	position: absolute;
-	top: 8px;
-	right: 8px;
-	z-index: 1;
-`;
-
-const stopBtn = css`
-	display: inline-flex;
-	align-items: center;
-	gap: 6px;
-	padding: 6px 12px;
-	border: 1px solid var(--color-oc-border);
-	border-radius: 0.5rem;
-	background-color: var(--color-oc-card);
-	font-size: 13px;
-	font-weight: 500;
-	color: var(--color-oc-fg);
-	cursor: pointer;
-`;
-
-const stopKbd = css`
-	font-size: 11px;
-	padding: 1px 5px;
-	background-color: var(--color-oc-muted-bg);
-	border-radius: 0.25rem;
-	color: var(--color-oc-fg-muted);
-	font-weight: 600;
-`;
-
 const bottomRow = css`
 	display: flex;
 	align-items: center;
@@ -281,19 +251,6 @@ export function PromptInput({
 				rows={1}
 				value={prompt}
 			/>
-
-			{streaming ? (
-				<div className={stopOverlay}>
-					<button
-						className={stopBtn}
-						onClick={onAbort}
-						type="button"
-					>
-						Stop
-						<span className={stopKbd}>ESC</span>
-					</button>
-				</div>
-			) : null}
 
 			<div className={bottomRow}>
 				<div className={actionGroup}>
