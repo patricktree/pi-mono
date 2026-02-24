@@ -284,7 +284,7 @@ function getToolDescription(step: ToolStepData): string {
 	try {
 		const args = JSON.parse(step.toolArgs);
 		if (step.toolName === "bash" && args.command) {
-			return args.command.length > 40 ? `${args.command.slice(0, 40)}...` : args.command;
+			return args.command;
 		}
 		if (step.toolName === "read" && args.path) {
 			return args.path;
@@ -304,7 +304,7 @@ function getToolDescription(step: ToolStepData): string {
 	} catch {
 		// ignore parse errors
 	}
-	return step.toolArgs.length > 40 ? `${step.toolArgs.slice(0, 40)}...` : step.toolArgs;
+	return step.toolArgs;
 }
 
 function bashCommandPrefix(step: ToolStepData): string | undefined {
