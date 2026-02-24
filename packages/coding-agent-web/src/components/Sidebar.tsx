@@ -1,5 +1,5 @@
 import { css, cx } from "@linaria/core";
-import { ClipboardList, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import logoUrl from "../assets/logo.svg";
 import type { SessionSummary } from "../protocol/types.js";
 import { shortenPath } from "../utils/helpers.js";
@@ -175,11 +175,6 @@ const sessionName = css`
 	min-width: 0;
 `;
 
-const sessionIcon = css`
-	flex-shrink: 0;
-	color: var(--color-oc-fg-faint);
-`;
-
 export function Sidebar({
 	open,
 	sessions,
@@ -241,7 +236,6 @@ export function Sidebar({
 						) : null}
 						{sessions.map((session) => {
 							const displayName = session.name ?? session.firstMessage;
-							const truncated = displayName.length > 20 ? `${displayName.slice(0, 20)}...` : displayName;
 							const active = session.id === currentSessionId;
 							return (
 								<button
@@ -251,8 +245,7 @@ export function Sidebar({
 									key={session.id}
 								>
 									<span className={sessionDash}>—</span>
-									<span className={sessionName}>{truncated}</span>
-									<ClipboardList size={14} className={sessionIcon} />
+									<span className={sessionName}>{displayName}</span>
 								</button>
 							);
 						})}
