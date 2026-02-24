@@ -88,7 +88,7 @@ export function ScheduledMessages({
 			</div>
 			{messages.map((message) => (
 				<div className={messageRow} key={message.id}>
-					<div className={bubble}>{message.text}</div>
+					<div className={bubble}>Steering: {message.text}</div>
 				</div>
 			))}
 		</div>
