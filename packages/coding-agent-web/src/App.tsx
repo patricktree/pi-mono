@@ -237,9 +237,13 @@ export function App() {
 		};
 	}, [handleExtensionUiRequest, onConnected, refreshContextUsage, refreshSessionState]);
 
-	// Sync current session ID to URL so reloading the tab restores the session
+	// Sync current session ID to URL so reloading the tab restores the session.
+	// Skip null (initial "not yet determined" state) to avoid wiping the URL
+	// param before onConnected has a chance to read it.
 	useEffect(() => {
-		setSessionInUrl(appState.currentSessionId);
+		if (appState.currentSessionId !== null) {
+			setSessionInUrl(appState.currentSessionId);
+		}
 	}, [appState.currentSessionId]);
 
 	useEffect(() => {
