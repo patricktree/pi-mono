@@ -1,6 +1,6 @@
 import { css } from "@linaria/core";
-import { ChevronDown, LoaderCircle } from "lucide-react";
-import type { BashResultData, ToolStepData, UiMessage } from "../state/store.js";
+import { CheckCircle2, ChevronRight, LoaderCircle, XCircle } from "lucide-react";
+import type { BashResultData, ToolStepData, ToolStepPhase, UiMessage } from "../state/store.js";
 import { Markdown } from "./Markdown.js";
 
 const toolText = css`
@@ -23,25 +23,58 @@ const systemText = css`
 const toolStepRoot = css`
 	display: flex;
 	flex-direction: column;
+	border-radius: var(--radius-oc);
+	overflow: hidden;
 `;
 
-const toolStepBtn = css`
+const toolStepBtnBase = css`
 	display: flex;
 	align-items: center;
 	gap: 8px;
+	width: 100%;
 	text-align: left;
 	font-size: 0.875rem;
 	line-height: 1.25rem;
-	color: var(--color-oc-fg-muted);
+	padding: 8px 12px;
+	border-radius: var(--radius-oc);
 	cursor: pointer;
+	transition: background-color 100ms;
+`;
+
+const toolStepBtnCalling = css`
+	background-color: var(--color-oc-muted-bg);
+	color: var(--color-oc-fg-muted);
 	&:hover {
-		color: var(--color-oc-fg);
+		background-color: var(--color-oc-border-light);
+	}
+`;
+
+const toolStepBtnRunning = css`
+	background-color: var(--color-oc-muted-bg);
+	color: var(--color-oc-fg-muted);
+	&:hover {
+		background-color: var(--color-oc-border-light);
+	}
+`;
+
+const toolStepBtnDone = css`
+	background-color: #ecfdf5;
+	color: #065f46;
+	&:hover {
+		background-color: #d1fae5;
+	}
+`;
+
+const toolStepBtnError = css`
+	background-color: #fef2f2;
+	color: #991b1b;
+	&:hover {
+		background-color: #fee2e2;
 	}
 `;
 
 const toolLabel = css`
 	font-weight: 600;
-	color: var(--color-oc-fg);
 	flex-shrink: 0;
 `;
 
@@ -57,14 +90,25 @@ const spinIcon = css`
 	flex-shrink: 0;
 `;
 
+const statusIcon = css`
+	flex-shrink: 0;
+`;
+
 const chevronIcon = css`
-	color: var(--color-oc-fg-faint);
 	flex-shrink: 0;
 	transition: transform 150ms;
 `;
 
+const chevronExpanded = css`
+	transform: rotate(90deg);
+`;
+
 const expandedContent = css`
 	margin-top: 8px;
+`;
+
+const bashCommandLine = css`
+	font-weight: 600;
 `;
 
 const codeBlock = css`
@@ -137,6 +181,20 @@ export function renderStep(
 	}
 }
 
+function getPhaseButtonClass(phase: ToolStepPhase): string {
+	switch (phase) {
+		case "done":
+			return toolStepBtnDone;
+		case "error":
+			return toolStepBtnError;
+		case "running":
+			return toolStepBtnRunning;
+		case "calling":
+		default:
+			return toolStepBtnCalling;
+	}
+}
+
 function ToolStep({
 	step,
 	messageId,
@@ -151,11 +209,12 @@ function ToolStep({
 	const isExpanded = expandedTools.has(messageId);
 	const toolLabelText = getToolLabel(step.toolName);
 	const toolDescription = getToolDescription(step);
+	const phaseClass = getPhaseButtonClass(step.phase);
 
 	return (
 		<div className={toolStepRoot}>
 			<button
-				className={toolStepBtn}
+				className={`${toolStepBtnBase} ${phaseClass}`}
 				onClick={() => {
 					setExpandedTools((prev) => {
 						const next = new Set(prev);
@@ -169,25 +228,23 @@ function ToolStep({
 				}}
 				type="button"
 			>
-				<span className={toolLabel}>{toolLabelText}</span>
-				<span className={toolDesc}>{toolDescription}</span>
-				{step.phase === "running" ? (
+				<ChevronRight size={14} className={`${chevronIcon} ${isExpanded ? chevronExpanded : ""}`} />
+				{step.phase === "done" ? (
+					<CheckCircle2 size={14} className={statusIcon} />
+				) : step.phase === "error" ? (
+					<XCircle size={14} className={statusIcon} />
+				) : step.phase === "running" ? (
 					<LoaderCircle size={14} className={spinIcon} />
 				) : null}
-				{isExpanded ? (
-					<ChevronDown size={14} className={chevronIcon} />
-				) : null}
+				<span className={toolLabel}>{toolLabelText}</span>
+				<span className={toolDesc}>{toolDescription}</span>
 			</button>
-			{isExpanded ? (
+			{isExpanded && (bashCommandPrefix(step) || step.result) ? (
 				<div className={expandedContent}>
 					<pre className={codeBlock}>
-						<code>{formatToolCall(step)}</code>
-						{step.result ? (
-							<>
-								{"\n\n"}
-								<code>{step.result}</code>
-							</>
-						) : null}
+						{bashCommandPrefix(step) ? <code className={bashCommandLine}>{bashCommandPrefix(step)}</code> : null}
+						{bashCommandPrefix(step) && step.result ? "\n" : null}
+						{step.result ? <code>{step.result}</code> : null}
 					</pre>
 				</div>
 			) : null}
@@ -250,14 +307,15 @@ function getToolDescription(step: ToolStepData): string {
 	return step.toolArgs.length > 40 ? `${step.toolArgs.slice(0, 40)}...` : step.toolArgs;
 }
 
-function formatToolCall(step: ToolStepData): string {
-	if (step.toolName === "bash") {
-		try {
-			const args = JSON.parse(step.toolArgs);
-			if (args.command) return `$ ${args.command}`;
-		} catch {
-			// ignore
-		}
+function bashCommandPrefix(step: ToolStepData): string | undefined {
+	if (step.toolName !== "bash") return undefined;
+	try {
+		const args = JSON.parse(step.toolArgs);
+		if (args.command) return `$ ${args.command}`;
+	} catch {
+		// ignore
 	}
-	return `${step.toolName}(${step.toolArgs})`;
+	return undefined;
 }
+
+

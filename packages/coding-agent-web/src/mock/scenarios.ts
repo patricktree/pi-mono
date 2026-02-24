@@ -1209,6 +1209,296 @@ const steeringScenario: Scenario = {
 };
 
 // ---------------------------------------------------------------------------
+// Tool error scenario: mix of successful and failed tool calls
+// ---------------------------------------------------------------------------
+
+const TOOL_ERROR_TEXT_1 = "Let me check the project files and run the test suite.";
+
+const TOOL_ERROR_TEXT_2 = "The tests failed. Let me read the failing test file to understand the issue.";
+
+const TOOL_ERROR_ANSWER = `Found the issue — the test expects a \`name\` field but the function returns \`title\` instead.
+
+I'll fix this by updating the function signature:
+
+\`\`\`ts
+// Before
+return { title: value };
+// After
+return { name: value };
+\`\`\`
+
+Want me to apply this fix?`;
+
+const toolErrorScenario: Scenario = {
+	autoPrompt: "Run the tests and fix any failures",
+	preload: [],
+	steps: [
+		{ delay: 100, event: { type: "agent_start" } },
+		// Text
+		{
+			delay: 50,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: { type: "text_start" },
+			},
+		},
+		...textDeltas(TOOL_ERROR_TEXT_1, 8, 20),
+		{
+			delay: 20,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: { type: "text_end", content: TOOL_ERROR_TEXT_1 },
+			},
+		},
+		// Tool 1: read package.json — success
+		{
+			delay: 50,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: { type: "toolcall_start" },
+			},
+		},
+		{
+			delay: 80,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: {
+					type: "toolcall_end",
+					toolCall: { type: "toolCall", id: "tc_te1", name: "read", arguments: { path: "package.json" } },
+				},
+			},
+		},
+		{
+			delay: 50,
+			event: {
+				type: "message_end",
+				message: {
+					role: "assistant",
+					content: [
+						{ type: "text", text: TOOL_ERROR_TEXT_1 },
+						{ type: "toolCall", id: "tc_te1", name: "read", arguments: { path: "package.json" } },
+					],
+					timestamp: Date.now(),
+				},
+			},
+		},
+		{ delay: 50, event: { type: "tool_execution_start", toolName: "read" } },
+		{
+			delay: 300,
+			event: {
+				type: "tool_execution_end",
+				toolName: "read",
+				result: {
+					content: [
+						{ type: "text", text: '{"name":"my-project","version":"1.0.0","scripts":{"test":"vitest run"}}' },
+					],
+				},
+				isError: false,
+			},
+		},
+		// Tool 2: run tests — error (non-zero exit)
+		{
+			delay: 100,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: { type: "toolcall_start" },
+			},
+		},
+		{
+			delay: 80,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: {
+					type: "toolcall_end",
+					toolCall: { type: "toolCall", id: "tc_te2", name: "bash", arguments: { command: "npm test" } },
+				},
+			},
+		},
+		{
+			delay: 50,
+			event: {
+				type: "message_end",
+				message: {
+					role: "assistant",
+					content: [{ type: "toolCall", id: "tc_te2", name: "bash", arguments: { command: "npm test" } }],
+					timestamp: Date.now(),
+				},
+			},
+		},
+		{ delay: 50, event: { type: "tool_execution_start", toolName: "bash" } },
+		{
+			delay: 800,
+			event: {
+				type: "tool_execution_end",
+				toolName: "bash",
+				result: {
+					content: [
+						{
+							type: "text",
+							text: "FAIL  test/utils.test.ts\n  ✕ should return name field (3ms)\n\n  Expected: {name: 'hello'}\n  Received: {title: 'hello'}\n\nTest Suites: 1 failed\nTests:       1 failed\nCommand exited with code 1",
+						},
+					],
+				},
+				isError: true,
+			},
+		},
+		// Text between tools
+		{
+			delay: 100,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: { type: "text_start" },
+			},
+		},
+		...textDeltas(TOOL_ERROR_TEXT_2, 8, 20),
+		{
+			delay: 20,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: { type: "text_end", content: TOOL_ERROR_TEXT_2 },
+			},
+		},
+		// Tool 3: read test file — success
+		{
+			delay: 50,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: { type: "toolcall_start" },
+			},
+		},
+		{
+			delay: 80,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: {
+					type: "toolcall_end",
+					toolCall: { type: "toolCall", id: "tc_te3", name: "read", arguments: { path: "test/utils.test.ts" } },
+				},
+			},
+		},
+		{
+			delay: 50,
+			event: {
+				type: "message_end",
+				message: {
+					role: "assistant",
+					content: [
+						{ type: "text", text: TOOL_ERROR_TEXT_2 },
+						{ type: "toolCall", id: "tc_te3", name: "read", arguments: { path: "test/utils.test.ts" } },
+					],
+					timestamp: Date.now(),
+				},
+			},
+		},
+		{ delay: 50, event: { type: "tool_execution_start", toolName: "read" } },
+		{
+			delay: 300,
+			event: {
+				type: "tool_execution_end",
+				toolName: "read",
+				result: {
+					content: [
+						{
+							type: "text",
+							text: 'import { describe, it, expect } from "vitest";\nimport { getName } from "../src/utils";\n\ndescribe("getName", () => {\n  it("should return name field", () => {\n    expect(getName("hello")).toEqual({ name: "hello" });\n  });\n});',
+						},
+					],
+				},
+				isError: false,
+			},
+		},
+		// Tool 4: read source — error (file not found)
+		{
+			delay: 100,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: { type: "toolcall_start" },
+			},
+		},
+		{
+			delay: 80,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: {
+					type: "toolcall_end",
+					toolCall: { type: "toolCall", id: "tc_te4", name: "read", arguments: { path: "src/utils.ts" } },
+				},
+			},
+		},
+		{
+			delay: 50,
+			event: {
+				type: "message_end",
+				message: {
+					role: "assistant",
+					content: [{ type: "toolCall", id: "tc_te4", name: "read", arguments: { path: "src/utils.ts" } }],
+					timestamp: Date.now(),
+				},
+			},
+		},
+		{ delay: 50, event: { type: "tool_execution_start", toolName: "read" } },
+		{
+			delay: 200,
+			event: {
+				type: "tool_execution_end",
+				toolName: "read",
+				result: {
+					content: [
+						{
+							type: "text",
+							text: "export function getName(value: string) {\n  return { title: value };\n}",
+						},
+					],
+				},
+				isError: false,
+			},
+		},
+		// Final answer
+		{
+			delay: 100,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: { type: "text_start" },
+			},
+		},
+		...textDeltas(TOOL_ERROR_ANSWER, 6, 25),
+		{
+			delay: 20,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: { type: "text_end", content: TOOL_ERROR_ANSWER },
+			},
+		},
+		{
+			delay: 50,
+			event: {
+				type: "message_end",
+				message: {
+					role: "assistant",
+					content: [{ type: "text", text: TOOL_ERROR_ANSWER }],
+					timestamp: Date.now(),
+				},
+			},
+		},
+		{ delay: 50, event: { type: "agent_end" } },
+	],
+};
+
+// ---------------------------------------------------------------------------
 // Registry
 // ---------------------------------------------------------------------------
 
@@ -1222,4 +1512,5 @@ export const SCENARIOS: Record<string, Scenario> = {
 	"in-progress": inProgressScenario,
 	thinking: thinkingScenario,
 	steering: steeringScenario,
+	"tool-error": toolErrorScenario,
 };

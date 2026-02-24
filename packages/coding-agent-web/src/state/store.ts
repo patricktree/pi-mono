@@ -529,12 +529,37 @@ function convertAssistantPart(part: AssistantContent, toolStepMap: Map<string, U
 }
 
 function toPreviewString(value: unknown, maxLength: number): string {
+	const text = extractResultText(value);
+	return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
+}
+
+/** Extract plain text from a tool result, which may be a string, a content array, or an arbitrary object. */
+function extractResultText(value: unknown): string {
 	if (typeof value === "string") {
-		return value.length > maxLength ? `${value.slice(0, maxLength)}...` : value;
+		return value;
+	}
+	// Handle { content: [{ type: "text", text: "..." }, ...] } shape
+	if (typeof value === "object" && value !== null && "content" in value) {
+		const content = (value as { content: unknown }).content;
+		if (Array.isArray(content)) {
+			const texts: string[] = [];
+			for (const part of content) {
+				if (
+					typeof part === "object" &&
+					part !== null &&
+					"text" in part &&
+					typeof (part as { text: unknown }).text === "string"
+				) {
+					texts.push((part as { text: string }).text);
+				}
+			}
+			if (texts.length > 0) {
+				return texts.join("");
+			}
+		}
 	}
 	try {
-		const stringified = JSON.stringify(value);
-		return stringified.length > maxLength ? `${stringified.slice(0, maxLength)}...` : stringified;
+		return JSON.stringify(value);
 	} catch {
 		return String(value);
 	}
