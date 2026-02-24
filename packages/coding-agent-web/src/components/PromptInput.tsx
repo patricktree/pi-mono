@@ -279,9 +279,9 @@ export function PromptInput({
 				value={prompt}
 			/>
 
-			{mode === "prompt" ? (
-				<div className={bottomRow}>
-					<div className={actionGroup}>
+			<div className={bottomRow}>
+				<div className={actionGroup}>
+					{mode === "prompt" ? (
 						<button
 							className={iconBtn}
 							disabled={!connected}
@@ -291,30 +291,30 @@ export function PromptInput({
 						>
 							<ImagePlus size={18} />
 						</button>
-						{streaming ? (
-							<button
-								className={squareBtn}
-								onClick={onAbort}
-								type="button"
-							>
-								<Square size={14} />
-							</button>
-						) : null}
+					) : null}
+					{streaming ? (
 						<button
-							className={cx(sendBtn, hasPromptContent ? sendBtnActive : sendBtnInactive)}
-							disabled={!connected || !hasPromptContent}
-							onClick={onSend}
+							className={squareBtn}
+							onClick={onAbort}
 							type="button"
-							aria-label="Send"
 						>
-							<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-								<line x1="12" y1="19" x2="12" y2="5" />
-								<polyline points="5 12 12 5 19 12" />
-							</svg>
+							<Square size={14} />
 						</button>
-					</div>
+					) : null}
+					<button
+						className={cx(sendBtn, hasPromptContent ? sendBtnActive : sendBtnInactive)}
+						disabled={!connected || !hasPromptContent}
+						onClick={onSend}
+						type="button"
+						aria-label="Send"
+					>
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+							<line x1="12" y1="19" x2="12" y2="5" />
+							<polyline points="5 12 12 5 19 12" />
+						</svg>
+					</button>
 				</div>
-			) : null}
+			</div>
 		</div>
 	);
 }
