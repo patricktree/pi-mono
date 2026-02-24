@@ -1,5 +1,5 @@
 import { css, cx } from "@linaria/core";
-import { Plus, Square, X } from "lucide-react";
+import { ImagePlus, Square, X } from "lucide-react";
 import { useCallback, useEffect, useRef } from "react";
 import type { InputMode } from "./BottomToolbar.js";
 import type { ImageContent } from "../protocol/types.js";
@@ -289,7 +289,7 @@ export function PromptInput({
 							type="button"
 							aria-label="Attach image"
 						>
-							<Plus size={18} />
+							<ImagePlus size={18} />
 						</button>
 						{streaming ? (
 							<button
