@@ -1,4 +1,4 @@
-import { css } from "@linaria/core";
+import { css, cx } from "@linaria/core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BottomToolbar, type InputMode } from "./components/BottomToolbar.js";
 import { Header } from "./components/Header.js";
@@ -14,6 +14,7 @@ import type { ExtensionUiRequestEvent, ImageContent, ServerEvent, SessionSummary
 import { AppStore, type AppState } from "./state/store.js";
 import type { Transport } from "./transport/transport.js";
 import { WsClient } from "./transport/ws-client.js";
+import { globalStyles } from "./styles/globalStyles.js";
 import { deriveSessionTitle, error, getWebSocketUrl, groupTurns, lastUserMessage, log, warn } from "./utils/helpers.js";
 
 const INITIAL_STATE: AppState = {
@@ -406,7 +407,7 @@ export function App() {
 	}, [appState.currentSessionId, appState.sessions]);
 
 	return (
-		<div className={appRoot}>
+		<div className={cx(globalStyles, appRoot)}>
 			<Sidebar
 				open={appState.sidebarOpen}
 				sessions={appState.sessions}
