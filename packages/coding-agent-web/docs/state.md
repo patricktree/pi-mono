@@ -16,6 +16,7 @@ interface AppState {
   currentSessionId: string | null;
   sidebarOpen: boolean;
   contextUsage: ContextUsage | undefined;
+  thinkingLevel: ThinkingLevel | undefined;
 }
 ```
 
@@ -28,10 +29,17 @@ Backend message/event shapes are normalized into `UiMessage` objects:
 ```typescript
 interface UiMessage {
   id: string;
-  kind: "user" | "assistant" | "thinking" | "tool" | "error" | "system";
+  kind: "user" | "assistant" | "thinking" | "tool" | "error" | "system" | "bash";
   text: string;
   toolStep?: ToolStepData;
+  bashResult?: BashResultData;
   images?: ImageContent[];
+}
+
+interface BashResultData {
+  command: string;
+  output: string;
+  exitCode: number | undefined;
 }
 ```
 
@@ -43,6 +51,7 @@ interface UiMessage {
 | `assistant` | Final assistant response text |
 | `thinking` | Reasoning stream blocks |
 | `tool` | Tool invocation with status/result preview |
+| `bash` | User-initiated shell command result (via shell mode or `!` prefix) |
 | `error` | Command/extension/backend errors |
 | `system` | System/extension notifications |
 

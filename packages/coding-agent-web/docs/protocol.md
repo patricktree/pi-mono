@@ -152,6 +152,16 @@ Abort a running user-initiated bash command.
 {"id":"req_11","type":"abort_bash"}
 ```
 
+### `set_thinking_level`
+
+Set the thinking/reasoning level for the LLM.
+
+```json
+{"id":"req_12","type":"set_thinking_level","level":"high"}
+```
+
+Valid levels: `"off"`, `"minimal"`, `"low"`, `"medium"`, `"high"`, `"xhigh"`.
+
 ## Events (Server → Client)
 
 All events are broadcast to connected web clients.

@@ -40,10 +40,15 @@ Opens the browser with `?mock=default`, which replays canned events through a `T
 | URL | Scenario |
 | --- | --- |
 | `?mock` or `?mock=default` | Thinking, tool call, streamed answer |
+| `?mock=empty` | Empty state, no sessions, no auto-prompt |
 | `?mock=error` | Extension error mid-stream |
 | `?mock=multi-tool` | Multiple sequential tool calls |
 | `?mock=long` | Long streamed markdown response |
+| `?mock=interleaved` | Text and tool calls alternate across multiple turns |
+| `?mock=in-progress` | Pauses mid-stream (streaming dot stays visible) |
+| `?mock=thinking` | Agent started but no output yet (just streaming dot) |
 | `?mock=steering` | Long-running agent with a scheduled steering message |
+| `?mock=tool-error` | Mix of successful and failed tool calls |
 
 ## Build
 
@@ -84,17 +89,19 @@ Runs Biome and TypeScript (`tsc --noEmit`).
 | `vite.config.ts` | Vite config (React SWC + Linaria/wyw-in-js plugin, WS proxy) |
 | `tsconfig.json` | Strict TS config, React JSX, alias paths |
 | `src/main.tsx` | React entrypoint |
-| `src/App.tsx` | Root app component |
-| `src/index.css` | CSS reset, design tokens, markdown/base styles |
-| `src/components/ui/*` | Reusable UI primitives |
+| `src/App.tsx` | Root app component (layout + orchestration) |
+| `src/styles/globalStyles.ts` | CSS reset, design tokens, base styles (Linaria `:global()`) |
+| `src/components/*.tsx` | UI components (see architecture.md for full list) |
+| `src/components/ui/*` | Reusable UI primitives (badge, button, textarea) |
 | `src/lib/utils.ts` | `cx()` re-export from `@linaria/core` |
+| `src/utils/helpers.ts` | Logging, turn grouping, URL helpers, shared CSS classes |
 | `src/state/store.ts` | AppStore and event-to-state mapping |
 | `src/protocol/types.ts` | Shared protocol types |
 | `src/protocol/client.ts` | Typed protocol client |
 | `src/transport/transport.ts` | Transport interface |
 | `src/transport/ws-client.ts` | WebSocket transport |
-| `src/mock/create-scenario-transport.ts` | Factory for visual dev mock transport |
 | `src/transport/test-transport.ts` | Test/mock transport implementation |
+| `src/mock/create-scenario-transport.ts` | Factory for visual dev mock transport |
 | `src/mock/scenarios.ts` | Mock scenario definitions |
 
 ## Main Dependencies

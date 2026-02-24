@@ -4,6 +4,14 @@ Web frontend for `@mariozechner/pi-coding-agent --mode web`.
 
 This package is a React + Vite app styled with [Linaria](https://github.com/callstack/linaria) (zero-runtime CSS-in-JS). It is a dedicated browser client for the coding-agent protocol server (WebSocket + RPC messages).
 
+## Quick start
+
+```bash
+npm ci
+npm run build
+node packages/coding-agent/dist/cli.js --mode web --port 4781 --host 127.0.0.1
+```
+
 ## Development
 
 ```bash
@@ -44,12 +52,18 @@ This opens the browser with `?mock=default`, which replays canned events through
 
 Available mock scenarios:
 
-| URL | Scenario |
-| --- | --- |
-| `?mock` or `?mock=default` | Thinking, tool call, streamed answer |
-| `?mock=error` | Extension error mid-stream |
-| `?mock=multi-tool` | Multiple sequential tool calls |
-| `?mock=long` | Long streamed markdown response |
+| URL                        | Scenario                                             |
+| -------------------------- | ---------------------------------------------------- |
+| `?mock` or `?mock=default` | Thinking, tool call, streamed answer                 |
+| `?mock=empty`              | Empty state, no sessions, no auto-prompt             |
+| `?mock=error`              | Extension error mid-stream                           |
+| `?mock=multi-tool`         | Multiple sequential tool calls                       |
+| `?mock=long`               | Long streamed markdown response                      |
+| `?mock=interleaved`        | Text and tool calls alternate across multiple turns  |
+| `?mock=in-progress`        | Pauses mid-stream (streaming dot stays visible)      |
+| `?mock=thinking`           | Agent started but no output yet (just streaming dot) |
+| `?mock=steering`           | Long-running agent with a scheduled steering message |
+| `?mock=tool-error`         | Mix of successful and failed tool calls              |
 
 ### Production build
 

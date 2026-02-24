@@ -60,6 +60,7 @@ The factory function `createScenarioTransport(scenario, logger)` in `src/mock/cr
 Built-in scenarios:
 
 - `default`
+- `empty`
 - `error`
 - `multi-tool`
 - `long`
@@ -67,15 +68,17 @@ Built-in scenarios:
 - `in-progress`
 - `thinking`
 - `steering`
-- `empty`
+- `tool-error`
 
 ## Scenario Model
 
 ```typescript
 interface Scenario {
   autoPrompt?: string;
+  autoSteeringPrompt?: string;
   preload: ServerEvent[];
   steps: ScenarioStep[];
+  emptySessions?: boolean;
 }
 
 interface ScenarioStep {
@@ -84,7 +87,10 @@ interface ScenarioStep {
 }
 ```
 
-`delay` is relative to the previous step.
+- `autoPrompt` — if set, the scenario auto-plays on connect with this as the user message.
+- `autoSteeringPrompt` — if set, a scheduled steering message is added while the agent is running.
+- `emptySessions` — if true, the mock transport returns an empty session list (fresh state).
+- `delay` is relative to the previous step.
 
 ## Protocol Client Wrapper
 
@@ -104,7 +110,8 @@ class ProtocolClient {
   switchSession(sessionPath: string): Promise<void>;
   newSession(): Promise<void>;
   getMessages(): Promise<HistoryMessage[]>;
-  getState(): Promise<{ sessionId: string; sessionName?: string }>;
+  getState(): Promise<{ sessionId: string; sessionName?: string; thinkingLevel?: ThinkingLevel }>;
+  setThinkingLevel(level: ThinkingLevel): Promise<void>;
   getContextUsage(): Promise<ContextUsage | undefined>;
   sendExtensionUiResponse(response: ExtensionUiResponse): void;
 }
