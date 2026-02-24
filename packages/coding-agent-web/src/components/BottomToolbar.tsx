@@ -33,6 +33,9 @@ const toggleGroup = css`
 	display: flex;
 	align-items: center;
 	gap: 2px;
+	border: 1px solid var(--color-oc-border);
+	border-radius: 0.5rem;
+	background-color: var(--color-oc-muted-bg);
 `;
 
 const toggleBtn = css`
@@ -45,14 +48,16 @@ const toggleBtn = css`
 	cursor: pointer;
 	flex-shrink: 0;
 	color: var(--color-oc-fg-faint);
+	transition: background-color 0.15s, color 0.15s;
 	&:hover {
-		background-color: var(--color-oc-muted-bg);
 		color: var(--color-oc-fg);
 	}
 `;
 
 const toggleBtnActive = css`
+	background-color: var(--color-oc-card);
 	color: var(--color-oc-fg);
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 `;
 
 /* -- Thinking selector styles -- */
