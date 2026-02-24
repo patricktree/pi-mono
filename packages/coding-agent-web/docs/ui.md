@@ -154,9 +154,11 @@ Keyboard behavior:
 On connect, the app:
 
 1. fetches current state + sessions
-2. resumes most recently modified session
+2. restores the session specified in the `?session=<id>` URL parameter (if present and valid), otherwise resumes the most recently modified session
 3. hydrates message history
 4. fetches context usage
+
+The current session ID is synced to the URL as a `?session=` query parameter via `history.replaceState`. This means reloading the browser tab restores the same session. Switching sessions, creating new sessions, and server-side session changes all update the URL automatically.
 
 Session changes (`new`, `switch`, etc.) refresh both current session metadata and session list.
 

@@ -77,13 +77,20 @@ Outputs static assets to `dist/`. Serve them from the backend:
 pi --mode web --serve-ui packages/coding-agent-web/dist
 ```
 
-### Auth token
+### URL parameters
 
-If the backend was started with `--web-token`, pass the token via query parameter:
+| Parameter | Purpose |
+| --- | --- |
+| `token` | Auth token (required if backend was started with `--web-token`) |
+| `session` | Session ID to restore on page load (set automatically when switching sessions) |
+
+Example:
 
 ```text
-http://127.0.0.1:4781/?token=<token>
+http://127.0.0.1:4781/?token=<token>&session=<session-id>
 ```
+
+The `?session=` parameter is updated automatically via `history.replaceState` whenever the active session changes, so reloading the tab restores the same session.
 
 ## Type checking and linting
 

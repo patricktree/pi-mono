@@ -75,6 +75,23 @@ export function getWebSocketUrl(): string {
 	return `${wsProtocol}//${window.location.host}/ws${tokenSuffix}`;
 }
 
+/** Read session ID from the URL query parameter. */
+export function getSessionFromUrl(): string | null {
+	const params = new URLSearchParams(window.location.search);
+	return params.get("session");
+}
+
+/** Update the session ID in the URL without a full page reload. */
+export function setSessionInUrl(sessionId: string | null): void {
+	const url = new URL(window.location.href);
+	if (sessionId) {
+		url.searchParams.set("session", sessionId);
+	} else {
+		url.searchParams.delete("session");
+	}
+	window.history.replaceState({}, "", url.toString());
+}
+
 export function readFileAsBase64(file: File): Promise<string> {
 	return new Promise((resolve, reject) => {
 		const reader = new FileReader();

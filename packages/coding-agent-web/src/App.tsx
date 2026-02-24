@@ -15,7 +15,7 @@ import { AppStore, type AppState } from "./state/store.js";
 import type { Transport } from "./transport/transport.js";
 import { WsClient } from "./transport/ws-client.js";
 import { globalStyles } from "./styles/globalStyles.js";
-import { deriveSessionTitle, error, getWebSocketUrl, groupTurns, lastUserMessage, log, warn } from "./utils/helpers.js";
+import { deriveSessionTitle, error, getSessionFromUrl, getWebSocketUrl, groupTurns, lastUserMessage, log, setSessionInUrl, warn } from "./utils/helpers.js";
 
 const INITIAL_STATE: AppState = {
 	connected: false,
@@ -134,14 +134,26 @@ export function App() {
 					storeRef.current.setThinkingLevel(sessionState.thinkingLevel);
 				}
 
-				const lastSession = sessions.length > 0 ? sessions[0] : undefined;
-				const needsSwitch = lastSession && lastSession.id !== sessionState.sessionId;
-				if (needsSwitch) {
-					log("resuming last session:", lastSession.id, lastSession.name ?? lastSession.firstMessage);
-					await protocolClient.switchSession(lastSession.path);
-					storeRef.current.setCurrentSessionId(lastSession.id);
+				// Determine which session to show: URL param > most recent > server default
+				const urlSessionId = getSessionFromUrl();
+				const urlSession = urlSessionId ? sessions.find((s) => s.id === urlSessionId) : undefined;
+
+				if (urlSession && urlSession.id !== sessionState.sessionId) {
+					log("restoring session from URL:", urlSession.id, urlSession.name ?? urlSession.firstMessage);
+					await protocolClient.switchSession(urlSession.path);
+					storeRef.current.setCurrentSessionId(urlSession.id);
+				} else if (urlSession) {
+					storeRef.current.setCurrentSessionId(urlSession.id);
 				} else {
-					storeRef.current.setCurrentSessionId(sessionState.sessionId);
+					const lastSession = sessions.length > 0 ? sessions[0] : undefined;
+					const needsSwitch = lastSession && lastSession.id !== sessionState.sessionId;
+					if (needsSwitch) {
+						log("resuming last session:", lastSession.id, lastSession.name ?? lastSession.firstMessage);
+						await protocolClient.switchSession(lastSession.path);
+						storeRef.current.setCurrentSessionId(lastSession.id);
+					} else {
+						storeRef.current.setCurrentSessionId(sessionState.sessionId);
+					}
 				}
 
 				const messages = await protocolClient.getMessages();
@@ -224,6 +236,11 @@ export function App() {
 			protocolRef.current = undefined;
 		};
 	}, [handleExtensionUiRequest, onConnected, refreshContextUsage, refreshSessionState]);
+
+	// Sync current session ID to URL so reloading the tab restores the session
+	useEffect(() => {
+		setSessionInUrl(appState.currentSessionId);
+	}, [appState.currentSessionId]);
 
 	useEffect(() => {
 		if (scrollerRef.current) {
