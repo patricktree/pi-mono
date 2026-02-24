@@ -362,7 +362,7 @@ export function App() {
 			/>
 
 			{hasContent && sessionTitle ? (
-				<SessionTitleBar title={sessionTitle} streaming={appState.streaming} />
+				<SessionTitleBar title={sessionTitle} />
 			) : null}
 
 			{/* Main content area */}
