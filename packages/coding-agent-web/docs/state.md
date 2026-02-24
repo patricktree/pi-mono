@@ -1,26 +1,45 @@
 # State Management
 
-State is managed by `AppStore` (`src/state/store.ts`) using an immutable publish/subscribe model.
+State is split by ownership:
 
-React subscribes to `AppStore` in `App.tsx` and mirrors store snapshots into component state for rendering.
+- **TanStack Query** for server-derived state and caching
+- **Zustand** for true client/UI state
 
-## AppState
+`App.tsx` composes both sources and computes view-only values during render (turn grouping, session title, latest user message).
+
+## Server State (TanStack Query)
+
+The app uses query keys for backend data:
+
+- `session-state` → `get_state`
+- `sessions` → `list_sessions`
+- `ui-messages:<sessionId>` → `get_messages` + streaming event updates
+- `context-usage:<sessionId>` → `get_context_usage`
+
+`ui-messages` stores normalized `UiMessage[]` (not raw protocol history).
+
+## Client State (Zustand)
+
+`useAppStore` in `src/state/store.ts` holds only non-server state:
 
 ```typescript
 interface AppState {
   connected: boolean;
   streaming: boolean;
-  messages: UiMessage[];
   scheduledMessages: UiMessage[];
-  sessions: SessionSummary[];
-  currentSessionId: string | null;
   sidebarOpen: boolean;
-  contextUsage: ContextUsage | undefined;
-  thinkingLevel: ThinkingLevel | undefined;
+  prompt: string;
+  inputMode: "prompt" | "shell";
+  pendingImages: ImageContent[];
+  expandedTools: Set<string>;
 }
 ```
 
-`scheduledMessages` holds steering messages that have been sent to the server but not yet interweaved into the conversation. These are displayed in a separate section between the message timeline and the prompt input.
+### Why these are in Zustand
+
+- They are local interaction state, not authoritative backend resources.
+- They must update immediately from user actions and transport status.
+- They do not need query cache semantics (staleness, refetch, invalidation).
 
 ## UI Message Model
 
@@ -36,6 +55,13 @@ interface UiMessage {
   images?: ImageContent[];
 }
 
+interface ToolStepData {
+  toolName: string;
+  toolArgs: string;
+  phase: "calling" | "running" | "done" | "error";
+  result?: string;
+}
+
 interface BashResultData {
   command: string;
   output: string;
@@ -43,84 +69,55 @@ interface BashResultData {
 }
 ```
 
-### Message kinds
+## MessageController
 
-| Kind | Meaning |
-| --- | --- |
-| `user` | Prompt entered by the user |
-| `assistant` | Final assistant response text |
-| `thinking` | Reasoning stream blocks |
-| `tool` | Tool invocation with status/result preview |
-| `bash` | User-initiated shell command result (via shell mode or `!` prefix) |
-| `error` | Command/extension/backend errors |
-| `system` | System/extension notifications |
+`MessageController` is a message-domain reducer/helper used by `App.tsx`.
 
-## Tool Step Lifecycle
+Responsibilities:
 
-Tool messages can carry structured status in `toolStep`:
+- `loadMessagesFromHistory(history)` converts `get_messages` history into `UiMessage[]`
+- `handleServerEvent(messages, event)` applies streaming events to current messages
+- `createUserMessage`, `createErrorMessage`, `createBashResultMessage` create local UI messages
+- tracks active streaming pointers for text/thinking/tool-step updates
 
-```typescript
-interface ToolStepData {
-  toolName: string;
-  toolArgs: string;
-  phase: "calling" | "running" | "done" | "error";
-  result?: string;
-}
-```
-
-Phase flow:
-
-1. `calling` — tool call detected (`toolcall_end`)
-2. `running` — execution started (`tool_execution_start`)
-3. `done` or `error` — execution ended (`tool_execution_end`)
+This keeps message transformation logic centralized while leaving persistence/caching to TanStack Query.
 
 ## Event Processing
 
-`AppStore.handleServerEvent()` applies server events to state.
+Event handling is coordinated in `App.tsx`:
 
-| Event | Effect |
-| --- | --- |
-| `agent_start` | `streaming = true`, reset active stream pointers |
-| `agent_end` | `streaming = false`, reset active stream pointers |
-| `message_start` (user) | Move matching scheduled message from `scheduledMessages` to `messages` |
-| `message_update:text_delta` | Append to active assistant text message |
-| `message_update:thinking_delta` | Append to active thinking message |
-| `message_update:toolcall_end` | Create a new tool step message |
-| `tool_execution_start` | Mark active tool step as `running` |
-| `tool_execution_end` | Mark active tool step as `done/error` and attach result preview |
-| `response` with `success: false` | Add error message |
-| `extension_ui_request` | Add system message for supported methods |
-| `extension_error` | Add error message |
+1. transport receives a `ServerEvent`
+2. local UI flags update in Zustand (`streaming` on `agent_start/agent_end`)
+3. scheduled steering messages are interwoven on `message_start`
+4. current session's `ui-messages` query cache is updated via:
+   `queryClient.setQueryData(uiMessagesKey, current => messageController.handleServerEvent(current, event))`
+
+### Special handling: scheduled steering messages
+
+When the user sends a prompt while streaming:
+
+- message is added to `scheduledMessages` (Zustand)
+- RPC request uses `streamingBehavior: "steer"`
+- on matching user `message_start`, the item is removed from `scheduledMessages` and appended to `ui-messages`
+
+`clearScheduledMessages()` supports "Restore to editor" by returning and clearing all scheduled items.
 
 ## History Hydration
 
-`loadMessagesFromHistory()` converts `get_messages` history into `UiMessage[]`.
+On initial load and session switch:
+
+- app fetches `get_messages`
+- converts history via `MessageController.loadMessagesFromHistory()`
+- stores result in `ui-messages` query cache
 
 Tool results are matched back to their originating tool call via `toolCallId`, so restored history shows correct tool status and previews.
 
-## Turn Grouping
+## Render-time Derivations
 
-The store keeps a flat timeline (`messages`).
+The app computes derived presentation state during render (not stored):
 
-`App.tsx` derives turn grouping at render time:
+- `groupTurns(messages)` → `{ orphans, turns }`
+- `lastUserMessage(messages)`
+- `deriveSessionTitle(messages)`
 
-- each `user` message starts a new turn
-- following messages belong to that turn until next user message
-
-This keeps store logic simple while allowing rich UI grouping.
-
-## Steering and Scheduled Messages
-
-When the user sends a message while the agent is streaming, it is dispatched as a steering message (`streamingBehavior: "steer"`) and added to `scheduledMessages`. When the server interweaves it into the conversation (signaled by `message_start` with a user message), the store moves the matching entry from `scheduledMessages` to `messages`.
-
-`clearScheduledMessages()` removes all scheduled messages and returns them. This is used by the dequeue action, which restores the message text into the prompt input and sends `clear_queue` to the server.
-
-## React-local UI State
-
-Some transient UI state is intentionally kept in React component state (not `AppStore`), for example:
-
-- current prompt input text
-- collapsed tool-turn IDs
-- pending image attachments
-
-`AppStore` remains focused on shared session/event state.
+This keeps the canonical state minimal and avoids duplicating derived data.

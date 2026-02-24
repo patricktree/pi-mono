@@ -1,6 +1,8 @@
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { css, cx } from "@linaria/core";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BottomToolbar, type InputMode } from "./components/BottomToolbar.js";
+import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useShallow } from "zustand/react/shallow";
+import { BottomToolbar } from "./components/BottomToolbar.js";
 import { Header } from "./components/Header.js";
 import { MessageList } from "./components/MessageList.js";
 import { PromptInput } from "./components/PromptInput.js";
@@ -10,24 +12,44 @@ import { Sidebar } from "./components/Sidebar.js";
 import { createScenarioTransport } from "./mock/create-scenario-transport.js";
 import { SCENARIOS } from "./mock/scenarios.js";
 import { ProtocolClient } from "./protocol/client.js";
-import type { ExtensionUiRequestEvent, ImageContent, ServerEvent, SessionSummary, ThinkingLevel } from "./protocol/types.js";
-import { AppStore, type AppState } from "./state/store.js";
+import type { ExtensionUiRequestEvent, MessageStartEvent, SessionSummary, ThinkingLevel } from "./protocol/types.js";
+import { MessageController, type UiMessage, useAppStore } from "./state/store.js";
+import { globalStyles } from "./styles/globalStyles.js";
 import type { Transport } from "./transport/transport.js";
 import { WsClient } from "./transport/ws-client.js";
-import { globalStyles } from "./styles/globalStyles.js";
-import { deriveSessionTitle, error, getSessionFromUrl, getWebSocketUrl, groupTurns, lastUserMessage, log, setSessionInUrl, warn } from "./utils/helpers.js";
+import {
+	deriveSessionTitle,
+	error,
+	getSessionFromUrl,
+	getWebSocketUrl,
+	groupTurns,
+	lastUserMessage,
+	log,
+	setSessionInUrl,
+	warn,
+} from "./utils/helpers.js";
 
-const INITIAL_STATE: AppState = {
-	connected: false,
-	streaming: false,
-	messages: [],
-	scheduledMessages: [],
-	sessions: [],
-	currentSessionId: null,
-	sidebarOpen: false,
-	contextUsage: undefined,
-	thinkingLevel: undefined,
-};
+const SESSION_STATE_QUERY_KEY = ["session-state"] as const;
+const SESSIONS_QUERY_KEY = ["sessions"] as const;
+const DISABLED_UI_MESSAGES_QUERY_KEY = ["ui-messages", "disabled"] as const;
+const DISABLED_CONTEXT_USAGE_QUERY_KEY = ["context-usage", "disabled"] as const;
+
+const uiMessagesQueryKey = (sessionId: string) => ["ui-messages", sessionId] as const;
+const contextUsageQueryKey = (sessionId: string) => ["context-usage", sessionId] as const;
+
+type SessionState = Awaited<ReturnType<ProtocolClient["getState"]>>;
+
+function sortSessions(sessions: SessionSummary[]): SessionSummary[] {
+	return [...sessions].sort((left, right) => new Date(right.modified).getTime() - new Date(left.modified).getTime());
+}
+
+function extractUserTextFromMessageStart(message: MessageStartEvent["message"]): string | undefined {
+	if (message.role !== "user") {
+		return undefined;
+	}
+	const content = message.content;
+	return typeof content === "string" ? content : content.map((part) => ("text" in part ? part.text : "")).join("");
+}
 
 const appRoot = css`
 	display: flex;
@@ -51,43 +73,215 @@ const footerStyle = css`
 `;
 
 export function App() {
-	const [appState, setAppState] = useState<AppState>(INITIAL_STATE);
-	const [prompt, setPrompt] = useState("");
-	const [collapsedTurns, setCollapsedTurns] = useState<Set<string>>(new Set());
-	const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
-	const [pendingImages, setPendingImages] = useState<ImageContent[]>([]);
-	const [inputMode, setInputMode] = useState<InputMode>("prompt");
-
+	const queryClient = useQueryClient();
 	const scrollerRef = useRef<HTMLDivElement | null>(null);
-	const storeRef = useRef(new AppStore());
 	const transportRef = useRef<Transport | undefined>(undefined);
 	const protocolRef = useRef<ProtocolClient | undefined>(undefined);
+	const messageControllerRef = useRef(new MessageController());
 
-	const refreshContextUsage = useCallback(async () => {
+	const {
+		connected,
+		streaming,
+		scheduledMessages,
+		sidebarOpen,
+		prompt,
+		inputMode,
+		pendingImages,
+		expandedTools,
+		setConnected,
+		setStreaming,
+		setSidebarOpen,
+		setPrompt,
+		setInputMode,
+		addPendingImages,
+		removePendingImage,
+		clearPendingImages,
+		clearExpandedTools,
+		setExpandedTools,
+		addScheduledMessage,
+		clearScheduledMessages,
+		consumeScheduledMessage,
+	} = useAppStore(
+		useShallow((state) => ({
+			connected: state.connected,
+			streaming: state.streaming,
+			scheduledMessages: state.scheduledMessages,
+			sidebarOpen: state.sidebarOpen,
+			prompt: state.prompt,
+			inputMode: state.inputMode,
+			pendingImages: state.pendingImages,
+			expandedTools: state.expandedTools,
+			setConnected: state.setConnected,
+			setStreaming: state.setStreaming,
+			setSidebarOpen: state.setSidebarOpen,
+			setPrompt: state.setPrompt,
+			setInputMode: state.setInputMode,
+			addPendingImages: state.addPendingImages,
+			removePendingImage: state.removePendingImage,
+			clearPendingImages: state.clearPendingImages,
+			clearExpandedTools: state.clearExpandedTools,
+			setExpandedTools: state.setExpandedTools,
+			addScheduledMessage: state.addScheduledMessage,
+			clearScheduledMessages: state.clearScheduledMessages,
+			consumeScheduledMessage: state.consumeScheduledMessage,
+		})),
+	);
+
+	const sessionStateQuery = useQuery({
+		queryKey: SESSION_STATE_QUERY_KEY,
+		enabled: connected,
+		refetchOnWindowFocus: false,
+		queryFn: async () => {
+			const protocolClient = protocolRef.current;
+			if (!protocolClient) {
+				throw new Error("Protocol client is not initialized");
+			}
+			return protocolClient.getState();
+		},
+	});
+
+	const sessionsQuery = useQuery({
+		queryKey: SESSIONS_QUERY_KEY,
+		enabled: connected,
+		refetchOnWindowFocus: false,
+		queryFn: async () => {
+			const protocolClient = protocolRef.current;
+			if (!protocolClient) {
+				throw new Error("Protocol client is not initialized");
+			}
+			return protocolClient.listSessions();
+		},
+	});
+
+	const currentSessionId = sessionStateQuery.data?.sessionId ?? null;
+	const messagesQueryKey = currentSessionId ? uiMessagesQueryKey(currentSessionId) : DISABLED_UI_MESSAGES_QUERY_KEY;
+	const contextQueryKey = currentSessionId ? contextUsageQueryKey(currentSessionId) : DISABLED_CONTEXT_USAGE_QUERY_KEY;
+
+	const messagesQuery = useQuery<UiMessage[]>({
+		queryKey: messagesQueryKey,
+		enabled: connected && currentSessionId !== null,
+		refetchOnWindowFocus: false,
+		queryFn: async () => {
+			const protocolClient = protocolRef.current;
+			if (!protocolClient) {
+				throw new Error("Protocol client is not initialized");
+			}
+			const history = await protocolClient.getMessages();
+			return messageControllerRef.current.loadMessagesFromHistory(history);
+		},
+	});
+
+	useQuery({
+		queryKey: contextQueryKey,
+		enabled: connected && currentSessionId !== null,
+		refetchOnWindowFocus: false,
+		queryFn: async () => {
+			const protocolClient = protocolRef.current;
+			if (!protocolClient) {
+				throw new Error("Protocol client is not initialized");
+			}
+			return protocolClient.getContextUsage();
+		},
+	});
+
+	const appendMessage = useCallback(
+		(sessionId: string | null, message: UiMessage): void => {
+			if (!sessionId) {
+				return;
+			}
+			queryClient.setQueryData<UiMessage[]>(uiMessagesQueryKey(sessionId), (current) => [...(current ?? []), message]);
+		},
+		[queryClient],
+	);
+
+	const appendErrorMessage = useCallback(
+		(text: string): void => {
+			const sessionId = queryClient.getQueryData<SessionState>(SESSION_STATE_QUERY_KEY)?.sessionId ?? null;
+			const message = messageControllerRef.current.createErrorMessage(text);
+			appendMessage(sessionId, message);
+		},
+		[appendMessage, queryClient],
+	);
+
+	const appendBashResultMessage = useCallback(
+		(command: string, output: string, exitCode: number | undefined): void => {
+			const sessionId = queryClient.getQueryData<SessionState>(SESSION_STATE_QUERY_KEY)?.sessionId ?? null;
+			const message = messageControllerRef.current.createBashResultMessage(command, output, exitCode);
+			appendMessage(sessionId, message);
+		},
+		[appendMessage, queryClient],
+	);
+
+	const refreshSessionState = useCallback(async (): Promise<{ sessionState: SessionState; sessions: SessionSummary[] } | undefined> => {
 		const protocolClient = protocolRef.current;
-		if (!protocolClient) return;
-		try {
-			const usage = await protocolClient.getContextUsage();
-			storeRef.current.setContextUsage(usage);
-		} catch (refreshError) {
-			log("failed to fetch context usage:", refreshError);
+		if (!protocolClient) {
+			return undefined;
 		}
-	}, []);
 
-	const refreshSessionState = useCallback(async () => {
-		const protocolClient = protocolRef.current;
-		if (!protocolClient) return;
 		try {
-			const [sessionState, sessions] = await Promise.all([protocolClient.getState(), protocolClient.listSessions()]);
-			storeRef.current.setSessionState(sessionState.sessionId, sessions);
+			const [sessionState, sessions] = await Promise.all([
+				queryClient.fetchQuery({
+					queryKey: SESSION_STATE_QUERY_KEY,
+					queryFn: () => protocolClient.getState(),
+				}),
+				queryClient.fetchQuery({
+					queryKey: SESSIONS_QUERY_KEY,
+					queryFn: () => protocolClient.listSessions(),
+				}),
+			]);
+			return { sessionState, sessions };
 		} catch (refreshError) {
 			log("failed to refresh session state:", refreshError);
+			return undefined;
 		}
-	}, []);
+	}, [queryClient]);
+
+	const refreshMessages = useCallback(
+		async (sessionId: string | null): Promise<void> => {
+			const protocolClient = protocolRef.current;
+			if (!protocolClient || !sessionId) {
+				return;
+			}
+
+			try {
+				await queryClient.fetchQuery({
+					queryKey: uiMessagesQueryKey(sessionId),
+					queryFn: async () => {
+						const history = await protocolClient.getMessages();
+						return messageControllerRef.current.loadMessagesFromHistory(history);
+					},
+				});
+			} catch (refreshError) {
+				log("failed to refresh message history:", refreshError);
+			}
+		},
+		[queryClient],
+	);
+
+	const refreshContextUsage = useCallback(
+		async (sessionId: string | null): Promise<void> => {
+			const protocolClient = protocolRef.current;
+			if (!protocolClient || !sessionId) {
+				return;
+			}
+
+			try {
+				await queryClient.fetchQuery({
+					queryKey: contextUsageQueryKey(sessionId),
+					queryFn: () => protocolClient.getContextUsage(),
+				});
+			} catch (refreshError) {
+				log("failed to fetch context usage:", refreshError);
+			}
+		},
+		[queryClient],
+	);
 
 	const handleExtensionUiRequest = useCallback((event: ExtensionUiRequestEvent) => {
 		const protocolClient = protocolRef.current;
-		if (!protocolClient) return;
+		if (!protocolClient) {
+			return;
+		}
 
 		switch (event.method) {
 			case "confirm": {
@@ -125,62 +319,60 @@ export function App() {
 	const onConnected = useCallback(
 		async (mockAutoPrompt?: string, mockAutoSteeringPrompt?: string) => {
 			const protocolClient = protocolRef.current;
-			if (!protocolClient) return;
+			if (!protocolClient) {
+				return;
+			}
 
 			try {
-				const [sessionState, sessions] = await Promise.all([protocolClient.getState(), protocolClient.listSessions()]);
-				storeRef.current.setSessions(sessions);
-				if (sessionState.thinkingLevel) {
-					storeRef.current.setThinkingLevel(sessionState.thinkingLevel);
+				const refreshed = await refreshSessionState();
+				if (!refreshed) {
+					return;
 				}
 
-				// Determine which session to show: URL param > most recent > server default
+				let sessionState = refreshed.sessionState;
+				const sortedSessions = sortSessions(refreshed.sessions);
+
 				const urlSessionId = getSessionFromUrl();
-				const urlSession = urlSessionId ? sessions.find((s) => s.id === urlSessionId) : undefined;
+				const urlSession = urlSessionId ? sortedSessions.find((session) => session.id === urlSessionId) : undefined;
+				let switched = false;
 
 				if (urlSession && urlSession.id !== sessionState.sessionId) {
 					log("restoring session from URL:", urlSession.id, urlSession.name ?? urlSession.firstMessage);
 					await protocolClient.switchSession(urlSession.path);
-					storeRef.current.setCurrentSessionId(urlSession.id);
-				} else if (urlSession) {
-					storeRef.current.setCurrentSessionId(urlSession.id);
-				} else {
-					const lastSession = sessions.length > 0 ? sessions[0] : undefined;
-					const needsSwitch = lastSession && lastSession.id !== sessionState.sessionId;
-					if (needsSwitch) {
+					switched = true;
+				} else if (!urlSession) {
+					const lastSession = sortedSessions.length > 0 ? sortedSessions[0] : undefined;
+					if (lastSession && lastSession.id !== sessionState.sessionId) {
 						log("resuming last session:", lastSession.id, lastSession.name ?? lastSession.firstMessage);
 						await protocolClient.switchSession(lastSession.path);
-						storeRef.current.setCurrentSessionId(lastSession.id);
-					} else {
-						storeRef.current.setCurrentSessionId(sessionState.sessionId);
+						switched = true;
 					}
 				}
 
-				const messages = await protocolClient.getMessages();
-				if (messages.length > 0) {
-					storeRef.current.loadMessagesFromHistory(messages);
+				if (switched) {
+					const afterSwitch = await refreshSessionState();
+					if (afterSwitch) {
+						sessionState = afterSwitch.sessionState;
+					}
 				}
-				void refreshContextUsage();
+
+				await refreshMessages(sessionState.sessionId);
+				void refreshContextUsage(sessionState.sessionId);
+
+				if (mockAutoPrompt) {
+					appendMessage(sessionState.sessionId, messageControllerRef.current.createUserMessage(mockAutoPrompt));
+				}
+				if (mockAutoSteeringPrompt) {
+					addScheduledMessage(messageControllerRef.current.createUserMessage(mockAutoSteeringPrompt));
+				}
 			} catch (loadError) {
 				log("failed to load session state:", loadError);
 			}
-
-			if (mockAutoPrompt) {
-				storeRef.current.addUserMessage(mockAutoPrompt);
-			}
-			if (mockAutoSteeringPrompt) {
-				storeRef.current.addUserMessage(mockAutoSteeringPrompt, { scheduled: true });
-			}
 		},
-		[refreshContextUsage],
+		[addScheduledMessage, appendMessage, refreshContextUsage, refreshMessages, refreshSessionState],
 	);
 
 	useEffect(() => {
-		const store = storeRef.current;
-		const unsubscribeStore = store.subscribe((state) => {
-			setAppState(state);
-		});
-
 		const params = new URLSearchParams(window.location.search);
 		const mockParam = params.get("mock");
 		let mockAutoPrompt: string | undefined;
@@ -202,82 +394,130 @@ export function App() {
 		transportRef.current = transport;
 		protocolRef.current = new ProtocolClient(transport);
 
-		const unsubscribeEvent = transport.onEvent((event: ServerEvent) => {
-			store.handleServerEvent(event);
+		const unsubscribeEvent = transport.onEvent((event) => {
+			if (event.type === "agent_start") {
+				setStreaming(true);
+			}
+			if (event.type === "agent_end") {
+				setStreaming(false);
+			}
+
+			const sessionId = queryClient.getQueryData<SessionState>(SESSION_STATE_QUERY_KEY)?.sessionId ?? null;
+			if (event.type === "message_start") {
+				const text = extractUserTextFromMessageStart(event.message);
+				if (text) {
+					const scheduledMessage = consumeScheduledMessage(text);
+					if (scheduledMessage) {
+						appendMessage(sessionId, scheduledMessage);
+					}
+				}
+			}
+
+			if (sessionId) {
+				queryClient.setQueryData<UiMessage[]>(uiMessagesQueryKey(sessionId), (current) =>
+					messageControllerRef.current.handleServerEvent(current ?? [], event),
+				);
+			}
+
 			if (event.type === "extension_ui_request") {
 				handleExtensionUiRequest(event);
 			}
 			if (event.type === "session_changed") {
-				void refreshSessionState();
+				messageControllerRef.current.resetActiveMessageIds();
+				void (async () => {
+					const refreshed = await refreshSessionState();
+					const refreshedSessionId = refreshed?.sessionState.sessionId ?? null;
+					await refreshMessages(refreshedSessionId);
+					void refreshContextUsage(refreshedSessionId);
+				})();
 			}
 			if (event.type === "agent_end") {
-				void refreshContextUsage();
+				void refreshContextUsage(sessionId);
 			}
 		});
 
-		const unsubscribeStatus = transport.onStatus((connected) => {
-			store.setConnected(connected);
-			if (connected) {
-				void onConnected(mockAutoPrompt, mockAutoSteeringPrompt);
-				mockAutoPrompt = undefined;
-				mockAutoSteeringPrompt = undefined;
+		const unsubscribeStatus = transport.onStatus((isConnected) => {
+			setConnected(isConnected);
+			if (!isConnected) {
+				setStreaming(false);
+				return;
 			}
+			void onConnected(mockAutoPrompt, mockAutoSteeringPrompt);
+			mockAutoPrompt = undefined;
+			mockAutoSteeringPrompt = undefined;
 		});
 
 		transport.connect();
 		log("client initialized");
 
 		return () => {
-			unsubscribeStore();
 			unsubscribeEvent();
 			unsubscribeStatus();
 			transport.disconnect();
 			transportRef.current = undefined;
 			protocolRef.current = undefined;
 		};
-	}, [handleExtensionUiRequest, onConnected, refreshContextUsage, refreshSessionState]);
+	}, [
+		appendMessage,
+		consumeScheduledMessage,
+		handleExtensionUiRequest,
+		onConnected,
+		queryClient,
+		refreshContextUsage,
+		refreshMessages,
+		refreshSessionState,
+		setConnected,
+		setStreaming,
+	]);
 
 	// Sync current session ID to URL so reloading the tab restores the session.
 	// Skip null (initial "not yet determined" state) to avoid wiping the URL
 	// param before onConnected has a chance to read it.
 	useEffect(() => {
-		if (appState.currentSessionId !== null) {
-			setSessionInUrl(appState.currentSessionId);
+		if (currentSessionId !== null) {
+			setSessionInUrl(currentSessionId);
 		}
-	}, [appState.currentSessionId]);
+	}, [currentSessionId]);
+
+	const messages = messagesQuery.data ?? [];
 
 	useEffect(() => {
 		if (scrollerRef.current) {
 			scrollerRef.current.scrollTop = scrollerRef.current.scrollHeight;
 		}
-	}, [appState.messages, appState.streaming]);
+	}, [messages, streaming]);
 
 	const sendBashCommand = useCallback(async () => {
 		const protocolClient = protocolRef.current;
-		if (!protocolClient || !appState.connected) return;
+		if (!protocolClient || !connected) {
+			return;
+		}
 
 		let command = prompt.trim();
-		if (!command) return;
+		if (!command) {
+			return;
+		}
 
-		// Strip leading "!" (or "!!" for exclude-from-context, treat the same for now)
 		if (command.startsWith("!!")) {
 			command = command.slice(2).trim();
 		} else if (command.startsWith("!")) {
 			command = command.slice(1).trim();
 		}
-		if (!command) return;
+		if (!command) {
+			return;
+		}
 
 		setPrompt("");
 		setInputMode("prompt");
 
 		try {
 			const result = await protocolClient.bash(command);
-			storeRef.current.addBashResultMessage(command, result.output, result.exitCode);
+			appendBashResultMessage(command, result.output, result.exitCode);
 		} catch (bashError) {
 			const messageText = bashError instanceof Error ? bashError.message : String(bashError);
-			storeRef.current.addErrorMessage(`Bash error: ${messageText}`);
+			appendErrorMessage(`Bash error: ${messageText}`);
 		}
-	}, [appState.connected, prompt]);
+	}, [appendBashResultMessage, appendErrorMessage, connected, prompt, setInputMode, setPrompt]);
 
 	const sendPrompt = useCallback(async () => {
 		if (inputMode === "shell") {
@@ -285,176 +525,244 @@ export function App() {
 		}
 
 		const protocolClient = protocolRef.current;
-		if (!protocolClient) return;
+		if (!protocolClient) {
+			return;
+		}
 
 		const message = prompt.trim();
-
-		// Auto-detect "!" prefix in prompt mode
 		if (message.startsWith("!")) {
 			return sendBashCommand();
 		}
 
 		const images = pendingImages.length > 0 ? [...pendingImages] : undefined;
-		if ((!message && !images) || !appState.connected) return;
+		if ((!message && !images) || !connected) {
+			return;
+		}
 
-		storeRef.current.addUserMessage(message || "(image attachment)", {
-			images,
-			scheduled: appState.streaming,
-		});
+		const userMessage = messageControllerRef.current.createUserMessage(message || "(image attachment)", { images });
+		if (streaming) {
+			addScheduledMessage(userMessage);
+		} else {
+			appendMessage(currentSessionId, userMessage);
+		}
 		setPrompt("");
-		setPendingImages([]);
+		clearPendingImages();
 
 		try {
 			const response = await protocolClient.prompt(message, {
 				images,
-				streamingBehavior: appState.streaming ? "steer" : undefined,
+				streamingBehavior: streaming ? "steer" : undefined,
 			});
 			if (!response.success) {
-				storeRef.current.addErrorMessage(`Command error (${response.command}): ${response.error || "unknown error"}`);
+				appendErrorMessage(`Command error (${response.command}): ${response.error || "unknown error"}`);
 			}
 		} catch (sendError) {
 			const messageText = sendError instanceof Error ? sendError.message : String(sendError);
-			storeRef.current.addErrorMessage(`Failed to send prompt: ${messageText}`);
+			appendErrorMessage(`Failed to send prompt: ${messageText}`);
 		}
-	}, [appState.connected, appState.streaming, inputMode, pendingImages, prompt, sendBashCommand]);
+	}, [
+		addScheduledMessage,
+		appendErrorMessage,
+		appendMessage,
+		clearPendingImages,
+		connected,
+		currentSessionId,
+		inputMode,
+		pendingImages,
+		prompt,
+		sendBashCommand,
+		setPrompt,
+		streaming,
+	]);
 
 	const dequeueScheduledMessages = useCallback(async () => {
 		const protocolClient = protocolRef.current;
-		if (!protocolClient) return;
+		if (!protocolClient) {
+			return;
+		}
 
-		const cleared = storeRef.current.clearScheduledMessages();
-		if (cleared.length === 0) return;
+		const cleared = clearScheduledMessages();
+		if (cleared.length === 0) {
+			return;
+		}
 
-		// Restore text into the prompt input
-		const restoredText = cleared.map((m) => m.text).join("\n\n");
-		setPrompt((current) => {
-			const combined = [restoredText, current].filter((t) => t.trim()).join("\n\n");
-			return combined;
-		});
+		const restoredText = cleared.map((message) => message.text).join("\n\n");
+		setPrompt((current) => [restoredText, current].filter((text) => text.trim()).join("\n\n"));
 
 		try {
 			await protocolClient.clearQueue();
 		} catch (dequeueError) {
 			const messageText = dequeueError instanceof Error ? dequeueError.message : String(dequeueError);
-			storeRef.current.addErrorMessage(`Failed to dequeue messages: ${messageText}`);
+			appendErrorMessage(`Failed to dequeue messages: ${messageText}`);
 		}
-	}, []);
+	}, [appendErrorMessage, clearScheduledMessages, setPrompt]);
 
 	const abortPrompt = useCallback(async () => {
 		const protocolClient = protocolRef.current;
-		if (!protocolClient || !appState.connected) return;
+		if (!protocolClient || !connected) {
+			return;
+		}
 
 		try {
 			await protocolClient.abort();
 		} catch (abortError) {
 			const messageText = abortError instanceof Error ? abortError.message : String(abortError);
-			storeRef.current.addErrorMessage(`Failed to abort: ${messageText}`);
+			appendErrorMessage(`Failed to abort: ${messageText}`);
 		}
-	}, [appState.connected]);
+	}, [appendErrorMessage, connected]);
 
 	const onNewSession = useCallback(async () => {
 		const protocolClient = protocolRef.current;
-		if (!protocolClient) return;
+		if (!protocolClient) {
+			return;
+		}
 
-		storeRef.current.setSidebarOpen(false);
+		setSidebarOpen(false);
 		try {
 			await protocolClient.newSession();
-			storeRef.current.clearMessages();
-			setCollapsedTurns(new Set());
-			setExpandedTools(new Set());
-			await refreshSessionState();
+			messageControllerRef.current.resetActiveMessageIds();
+			clearExpandedTools();
+			setPrompt("");
+			clearPendingImages();
+			setInputMode("prompt");
+
+			const refreshed = await refreshSessionState();
+			const sessionId = refreshed?.sessionState.sessionId ?? null;
+			await refreshMessages(sessionId);
+			void refreshContextUsage(sessionId);
 		} catch (sessionError) {
 			const messageText = sessionError instanceof Error ? sessionError.message : String(sessionError);
-			storeRef.current.addErrorMessage(`Failed to create session: ${messageText}`);
+			appendErrorMessage(`Failed to create session: ${messageText}`);
 		}
-	}, [refreshSessionState]);
+	}, [
+		appendErrorMessage,
+		clearExpandedTools,
+		clearPendingImages,
+		refreshContextUsage,
+		refreshMessages,
+		refreshSessionState,
+		setInputMode,
+		setPrompt,
+		setSidebarOpen,
+	]);
+
+	const sessions = useMemo(() => sortSessions(sessionsQuery.data ?? []), [sessionsQuery.data]);
 
 	const onSwitchSession = useCallback(
 		async (session: SessionSummary) => {
 			const protocolClient = protocolRef.current;
-			if (!protocolClient) return;
-
-			if (session.id === appState.currentSessionId) {
-				storeRef.current.setSidebarOpen(false);
+			if (!protocolClient) {
 				return;
 			}
 
-			storeRef.current.setSidebarOpen(false);
+			if (session.id === currentSessionId) {
+				setSidebarOpen(false);
+				return;
+			}
+
+			setSidebarOpen(false);
 			try {
 				await protocolClient.switchSession(session.path);
-				setCollapsedTurns(new Set());
-				setExpandedTools(new Set());
-				await refreshSessionState();
-				const messages = await protocolClient.getMessages();
-				if (messages.length > 0) {
-					storeRef.current.loadMessagesFromHistory(messages);
-				} else {
-					storeRef.current.clearMessages();
-				}
+				messageControllerRef.current.resetActiveMessageIds();
+				clearExpandedTools();
+				setPrompt("");
+				clearPendingImages();
+				setInputMode("prompt");
+
+				const refreshed = await refreshSessionState();
+				const sessionId = refreshed?.sessionState.sessionId ?? session.id;
+				await refreshMessages(sessionId);
+				void refreshContextUsage(sessionId);
 			} catch (switchError) {
 				const messageText = switchError instanceof Error ? switchError.message : String(switchError);
-				storeRef.current.addErrorMessage(`Failed to switch session: ${messageText}`);
+				appendErrorMessage(`Failed to switch session: ${messageText}`);
 			}
 		},
-		[appState.currentSessionId, refreshSessionState],
+		[
+			appendErrorMessage,
+			clearExpandedTools,
+			clearPendingImages,
+			currentSessionId,
+			refreshContextUsage,
+			refreshMessages,
+			refreshSessionState,
+			setInputMode,
+			setPrompt,
+			setSidebarOpen,
+		],
 	);
 
 	const onThinkingLevelChange = useCallback(
 		async (level: ThinkingLevel) => {
 			const protocolClient = protocolRef.current;
-			if (!protocolClient) return;
+			if (!protocolClient) {
+				return;
+			}
 
-			// Optimistically update the UI
-			storeRef.current.setThinkingLevel(level);
+			const previous = queryClient.getQueryData<SessionState>(SESSION_STATE_QUERY_KEY);
+			if (previous) {
+				queryClient.setQueryData<SessionState>(SESSION_STATE_QUERY_KEY, {
+					...previous,
+					thinkingLevel: level,
+				});
+			}
 
 			try {
 				await protocolClient.setThinkingLevel(level);
-			} catch (err) {
-				const messageText = err instanceof Error ? err.message : String(err);
-				storeRef.current.addErrorMessage(`Failed to set thinking level: ${messageText}`);
+			} catch (setLevelError) {
+				if (previous) {
+					queryClient.setQueryData(SESSION_STATE_QUERY_KEY, previous);
+				}
+				const messageText = setLevelError instanceof Error ? setLevelError.message : String(setLevelError);
+				appendErrorMessage(`Failed to set thinking level: ${messageText}`);
 			}
 		},
-		[],
+		[appendErrorMessage, queryClient],
 	);
 
-	const { orphans, turns } = useMemo(() => groupTurns(appState.messages), [appState.messages]);
+	const { orphans, turns } = useMemo(() => groupTurns(messages), [messages]);
 	const hasContent = orphans.length > 0 || turns.length > 0;
-	const latestUserId = useMemo(() => lastUserMessage(appState.messages)?.id, [appState.messages]);
-	const sessionTitle = useMemo(() => deriveSessionTitle(appState.messages), [appState.messages]);
+	const latestUserId = useMemo(() => lastUserMessage(messages)?.id, [messages]);
+	const sessionTitle = useMemo(() => deriveSessionTitle(messages), [messages]);
 
 	const currentSession = useMemo(() => {
-		if (!appState.currentSessionId) return undefined;
-		return appState.sessions.find((s) => s.id === appState.currentSessionId);
-	}, [appState.currentSessionId, appState.sessions]);
+		if (!currentSessionId) {
+			return undefined;
+		}
+		return sessions.find((session) => session.id === currentSessionId);
+	}, [currentSessionId, sessions]);
+
+	const thinkingLevel = sessionStateQuery.data?.thinkingLevel;
 
 	return (
 		<div className={cx(globalStyles, appRoot)}>
 			<Sidebar
-				open={appState.sidebarOpen}
-				sessions={appState.sessions}
-				currentSessionId={appState.currentSessionId}
+				open={sidebarOpen}
+				sessions={sessions}
+				currentSessionId={currentSessionId}
 				currentCwd={currentSession?.cwd}
-				onClose={() => storeRef.current.setSidebarOpen(false)}
-				onNewSession={() => void onNewSession()}
-				onSwitchSession={(session) => void onSwitchSession(session)}
+				onClose={() => setSidebarOpen(false)}
+				onNewSession={() => {
+					void onNewSession();
+				}}
+				onSwitchSession={(session) => {
+					void onSwitchSession(session);
+				}}
 			/>
 
 			<Header
-				connected={appState.connected}
-				onOpenSidebar={() => storeRef.current.setSidebarOpen(true)}
+				connected={connected}
+				onOpenSidebar={() => setSidebarOpen(true)}
 			/>
 
-			{hasContent && sessionTitle ? (
-				<SessionTitleBar title={sessionTitle} />
-			) : null}
+			{hasContent && sessionTitle ? <SessionTitleBar title={sessionTitle} /> : null}
 
-			{/* Main content area */}
 			<div className={mainScroller} ref={scrollerRef}>
 				<MessageList
 					orphans={orphans}
 					turns={turns}
 					latestUserId={latestUserId}
-					streaming={appState.streaming}
+					streaming={streaming}
 					expandedTools={expandedTools}
 					setExpandedTools={setExpandedTools}
 					cwd={currentSession?.cwd}
@@ -462,32 +770,39 @@ export function App() {
 			</div>
 
 			<ScheduledMessages
-				messages={appState.scheduledMessages}
-				onDequeue={() => void dequeueScheduledMessages()}
+				messages={scheduledMessages}
+				onDequeue={() => {
+					void dequeueScheduledMessages();
+				}}
 			/>
 
-			{/* Footer: prompt input + toolbar */}
 			<footer className={footerStyle}>
 				<PromptInput
 					mode={inputMode}
 					prompt={prompt}
-					streaming={appState.streaming}
-					connected={appState.connected}
+					streaming={streaming}
+					connected={connected}
 					hasContent={hasContent}
 					pendingImages={pendingImages}
 					onPromptChange={setPrompt}
 					onModeChange={setInputMode}
-					onSend={() => void sendPrompt()}
-					onAbort={() => void abortPrompt()}
-					onAddImages={(images) => setPendingImages((current) => [...current, ...images])}
-					onRemoveImage={(index) => setPendingImages((current) => current.filter((_, i) => i !== index))}
-					onError={(message) => storeRef.current.addErrorMessage(message)}
+					onSend={() => {
+						void sendPrompt();
+					}}
+					onAbort={() => {
+						void abortPrompt();
+					}}
+					onAddImages={addPendingImages}
+					onRemoveImage={removePendingImage}
+					onError={appendErrorMessage}
 				/>
 				<BottomToolbar
 					mode={inputMode}
 					onModeChange={setInputMode}
-					thinkingLevel={appState.thinkingLevel}
-					onThinkingLevelChange={(level) => void onThinkingLevelChange(level)}
+					thinkingLevel={thinkingLevel}
+					onThinkingLevelChange={(level) => {
+						void onThinkingLevelChange(level);
+					}}
 				/>
 			</footer>
 		</div>

@@ -95,7 +95,7 @@ Runs Biome and TypeScript (`tsc --noEmit`).
 | `src/components/ui/*` | Reusable UI primitives (badge, button, textarea) |
 | `src/lib/utils.ts` | `cx()` re-export from `@linaria/core` |
 | `src/utils/helpers.ts` | Logging, turn grouping, URL helpers, shared CSS classes |
-| `src/state/store.ts` | AppStore and event-to-state mapping |
+| `src/state/store.ts` | Zustand UI store + MessageController message reducer |
 | `src/protocol/types.ts` | Shared protocol types |
 | `src/protocol/client.ts` | Typed protocol client |
 | `src/transport/transport.ts` | Transport interface |
@@ -110,6 +110,8 @@ Runs Biome and TypeScript (`tsc --noEmit`).
 | --- | --- |
 | `react`, `react-dom` | UI runtime |
 | `vite`, `@vitejs/plugin-react-swc` | Build/dev server |
+| `@tanstack/react-query` | Server state fetching, caching, and synchronization |
+| `zustand` | Client/UI state store |
 | `@linaria/core`, `@wyw-in-js/vite` | Zero-runtime CSS-in-JS (build-time extraction) |
 | `@radix-ui/react-slot` | Primitive composition |
 | `lucide-react` | Icons |

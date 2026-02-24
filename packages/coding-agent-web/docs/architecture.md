@@ -6,7 +6,7 @@ The web frontend is a single-page application built with React, Vite, and [Linar
 
 ```text
 src/
-├── main.tsx                  Entry point, mounts <App />
+├── main.tsx                  Entry point, mounts <App /> with QueryClientProvider
 ├── App.tsx                   Root React component (layout + orchestration)
 ├── assets/
 │   └── logo.svg              App logo (used in sidebar + favicon)
@@ -37,7 +37,7 @@ src/
 │   ├── types.ts              Protocol type definitions (commands, events, messages)
 │   └── client.ts             ProtocolClient with typed RPC methods
 ├── state/
-│   └── store.ts              AppStore (immutable pub/sub state)
+│   └── store.ts              Zustand UI store + MessageController message reducer
 ├── styles/
 │   └── globalStyles.ts       CSS reset, design tokens, base styles (Linaria :global())
 ├── transport/
@@ -67,33 +67,36 @@ Everything above this layer is transport-agnostic.
 
 Protocol types in `src/protocol/types.ts` mirror the server event/command schema used by web/RPC modes.
 
-### State
+### Server state (TanStack Query)
 
-`AppStore` holds canonical application state:
+TanStack Query holds server-derived data and caching:
 
-- connection and streaming status
-- message timeline
-- scheduled (steering) messages
-- session list + current session
+- `session-state` (`get_state`)
+- `sessions` (`list_sessions`)
+- `ui-messages` per session (`get_messages`, plus streaming event updates)
+- `context-usage` per session (`get_context_usage`)
+
+Message history is normalized into UI-friendly messages before entering the query cache.
+
+### Client state (Zustand)
+
+Zustand holds true client/UI state:
+
+- socket status (`connected`)
+- local streaming flag (`streaming`)
 - sidebar visibility
-- context usage
-- thinking level
+- prompt text and input mode
+- pending image attachments
+- expanded tool rows
+- scheduled steering messages
 
-State updates are immutable. The UI subscribes to store updates and re-renders from the latest snapshot.
+### Message normalization and event reduction
 
-### UI
+`MessageController` in `src/state/store.ts` is a pure message-domain helper used by `App.tsx` to:
 
-`App.tsx` is the root UI orchestrator. It handles:
-
-- transport initialization and lifecycle
-- backend event handling
-- session auto-resume and switching
-- turn grouping and rendering
-- prompt input, keyboard handling, and image attachments
-- markdown rendering (`marked`) with sanitization (`DOMPurify`)
-- responsive layout and interaction states
-
-The UI is composed from Linaria `css` tagged template literals (scoped class names extracted at build time), global styles in `src/styles/globalStyles.ts` (CSS reset, design tokens, base styles via Linaria's `:global()` block), and a small set of reusable primitives in `src/components/ui`.
+- convert server history into `UiMessage[]`
+- apply incoming server events to current `UiMessage[]`
+- create local UI messages (user/error/bash)
 
 ## Data Flow
 
@@ -103,18 +106,20 @@ User input
   ▼
 React UI (App.tsx) ─── ProtocolClient ─── Transport (WsClient) ─── WebSocket
   │                                           │
+  │                                streaming server events
   ▼                                           │
-AppStore ◄──────────── handleServerEvent() ◄──┘
-  │                                     (streaming events)
+TanStack Query cache ◄── MessageController ◄──┘
+  │
   ▼
-React re-render from store state
+React re-render from query + zustand state
 ```
 
 1. User submits a prompt in the React UI
 2. `ProtocolClient` sends a typed command via `Transport`
 3. Backend streams events (`agent_start`, `message_update`, `tool_execution_*`, `agent_end`)
-4. `AppStore` converts events into `UiMessage` state
-5. React re-renders from updated state
+4. `MessageController` reduces events into updated `UiMessage[]`
+5. TanStack Query cache is updated (`setQueryData`)
+6. React re-renders from updated query state
 
 ## Backend Integration
 

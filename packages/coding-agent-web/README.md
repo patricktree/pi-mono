@@ -17,6 +17,13 @@ This package is a React + Vite app styled with [Linaria](https://github.com/call
 - Session management sidebar with create/switch and URL-synced reload persistence
 - WebSocket connection with status indicator, token auth, and context usage tracking
 
+## State model
+
+The frontend uses a split state model:
+
+- **TanStack Query** for server-derived state and caching (`session-state`, `sessions`, `ui-messages`, `context-usage`)
+- **Zustand** for true client/UI state (`prompt`, input mode, sidebar visibility, pending images, expanded tool rows, scheduled steering messages, connection/streaming flags)
+
 ## Quick start
 
 ```bash
