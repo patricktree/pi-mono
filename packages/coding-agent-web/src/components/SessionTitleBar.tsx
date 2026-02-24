@@ -1,6 +1,4 @@
 import { css } from "@linaria/core";
-import { MoreHorizontal } from "lucide-react";
-import { iconBtn } from "../utils/helpers.js";
 
 const titleBarStyle = css`
 	display: flex;
@@ -50,14 +48,11 @@ export function SessionTitleBar({
 	return (
 		<div className={titleBarStyle}>
 			<span className={titleText}>{title}</span>
-			<div className={rightGroup}>
-				{streaming ? (
+			{streaming ? (
+				<div className={rightGroup}>
 					<span className={spinnerIcon} />
-				) : null}
-				<button className={iconBtn} type="button">
-					<MoreHorizontal size={16} />
-				</button>
-			</div>
+				</div>
+			) : null}
 		</div>
 	);
 }

@@ -1,5 +1,5 @@
 import { css } from "@linaria/core";
-import { Folder, GitBranch, Pencil } from "lucide-react";
+import { Folder } from "lucide-react";
 
 const emptyRoot = css`
 	flex: 1 1 0%;
@@ -59,14 +59,6 @@ export function EmptyState({ cwd }: { cwd?: string }) {
 						</span>
 					</div>
 				) : null}
-				<div className={infoRow}>
-					<GitBranch size={16} />
-					<span>Main branch (dev)</span>
-				</div>
-				<div className={infoRow}>
-					<Pencil size={16} />
-					<span>Last modified <strong>3 minutes ago</strong></span>
-				</div>
 			</div>
 		</div>
 	);

@@ -1,14 +1,12 @@
 import { css } from "@linaria/core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BottomToolbar } from "./components/BottomToolbar.js";
-import { ChangesPanel } from "./components/ChangesPanel.js";
 import { Header } from "./components/Header.js";
 import { MessageList } from "./components/MessageList.js";
 import { PromptInput } from "./components/PromptInput.js";
 import { ScheduledMessages } from "./components/ScheduledMessages.js";
 import { SessionTitleBar } from "./components/SessionTitleBar.js";
 import { Sidebar } from "./components/Sidebar.js";
-import { TabBar, type TabId } from "./components/TabBar.js";
 import { createScenarioTransport } from "./mock/create-scenario-transport.js";
 import { SCENARIOS } from "./mock/scenarios.js";
 import { ProtocolClient } from "./protocol/client.js";
@@ -55,7 +53,6 @@ export function App() {
 	const [collapsedTurns, setCollapsedTurns] = useState<Set<string>>(new Set());
 	const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
 	const [pendingImages, setPendingImages] = useState<ImageContent[]>([]);
-	const [activeTab, setActiveTab] = useState<TabId>("session");
 
 	const scrollerRef = useRef<HTMLDivElement | null>(null);
 	const storeRef = useRef(new AppStore());
@@ -361,11 +358,8 @@ export function App() {
 
 			<Header
 				connected={appState.connected}
-				hasContent={hasContent}
 				onOpenSidebar={() => storeRef.current.setSidebarOpen(true)}
 			/>
-
-			{hasContent ? <TabBar activeTab={activeTab} onTabChange={setActiveTab} /> : null}
 
 			{hasContent && sessionTitle ? (
 				<SessionTitleBar title={sessionTitle} streaming={appState.streaming} />
@@ -373,19 +367,15 @@ export function App() {
 
 			{/* Main content area */}
 			<div className={mainScroller} ref={scrollerRef}>
-				{activeTab === "session" ? (
-					<MessageList
-						orphans={orphans}
-						turns={turns}
-						latestUserId={latestUserId}
-						streaming={appState.streaming}
-						expandedTools={expandedTools}
-						setExpandedTools={setExpandedTools}
-						cwd={currentSession?.cwd}
-					/>
-				) : (
-					<ChangesPanel />
-				)}
+				<MessageList
+					orphans={orphans}
+					turns={turns}
+					latestUserId={latestUserId}
+					streaming={appState.streaming}
+					expandedTools={expandedTools}
+					setExpandedTools={setExpandedTools}
+					cwd={currentSession?.cwd}
+				/>
 			</div>
 
 			<ScheduledMessages

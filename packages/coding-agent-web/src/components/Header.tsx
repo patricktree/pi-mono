@@ -19,7 +19,7 @@ const rightGroup = css`
 	gap: 8px;
 `;
 
-const statusBtn = css`
+const statusIndicator = css`
 	display: inline-flex;
 	align-items: center;
 	gap: 8px;
@@ -30,10 +30,6 @@ const statusBtn = css`
 	font-size: 13px;
 	font-weight: 500;
 	color: var(--color-oc-fg);
-	cursor: pointer;
-	&:hover {
-		background-color: var(--color-oc-muted-bg);
-	}
 `;
 
 const statusDot = css`
@@ -50,29 +46,11 @@ const statusDotDisconnected = css`
 	background-color: var(--color-oc-error);
 `;
 
-const shareBtn = css`
-	display: inline-flex;
-	align-items: center;
-	padding: 6px 14px;
-	border: 1px solid var(--color-oc-border);
-	border-radius: 0.5rem;
-	background-color: var(--color-oc-card);
-	font-size: 13px;
-	font-weight: 500;
-	color: var(--color-oc-fg);
-	cursor: pointer;
-	&:hover {
-		background-color: var(--color-oc-muted-bg);
-	}
-`;
-
 export function Header({
 	connected,
-	hasContent,
 	onOpenSidebar,
 }: {
 	connected: boolean;
-	hasContent: boolean;
 	onOpenSidebar: () => void;
 }) {
 	return (
@@ -86,15 +64,10 @@ export function Header({
 				<Menu size={18} />
 			</button>
 			<div className={rightGroup}>
-				<button className={statusBtn} type="button">
+				<span className={statusIndicator}>
 					<span className={cx(statusDot, connected ? statusDotConnected : statusDotDisconnected)} />
-					Status
-				</button>
-				{hasContent ? (
-					<button className={shareBtn} type="button">
-						Share
-					</button>
-				) : null}
+					{connected ? "Connected" : "Disconnected"}
+				</span>
 			</div>
 		</header>
 	);

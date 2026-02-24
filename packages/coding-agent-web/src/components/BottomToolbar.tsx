@@ -1,6 +1,5 @@
 import { css } from "@linaria/core";
-import { ChevronDown, Monitor, Terminal } from "lucide-react";
-import { toolbarItem } from "../utils/helpers.js";
+import { Monitor, Terminal } from "lucide-react";
 
 const toolbarRow = css`
 	display: flex;
@@ -36,23 +35,6 @@ const smallIconBtn = css`
 export function BottomToolbar() {
 	return (
 		<div className={toolbarRow}>
-			<button className={toolbarItem} type="button">
-				Build
-				<ChevronDown size={12} />
-			</button>
-			<button className={toolbarItem} type="button">
-				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-					<path d="M12 2L2 7l10 5 10-5-10-5z" />
-					<path d="M2 17l10 5 10-5" />
-					<path d="M2 12l10 5 10-5" />
-				</svg>
-				Big Pickle
-				<ChevronDown size={12} />
-			</button>
-			<button className={toolbarItem} type="button">
-				Default
-				<ChevronDown size={12} />
-			</button>
 			<div className={spacer} />
 			<button className={smallIconBtn} type="button">
 				<Terminal size={16} />

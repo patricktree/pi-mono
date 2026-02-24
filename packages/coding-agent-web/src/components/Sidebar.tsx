@@ -1,7 +1,7 @@
 import { css, cx } from "@linaria/core";
-import { ClipboardList, HelpCircle, MoreHorizontal, Plus, Settings } from "lucide-react";
+import { ClipboardList, Plus } from "lucide-react";
 import type { SessionSummary } from "../protocol/types.js";
-import { iconBtn, sidebarIconBtn, shortenPath } from "../utils/helpers.js";
+import { shortenPath } from "../utils/helpers.js";
 
 const overlay = css`
 	position: fixed;
@@ -215,18 +215,8 @@ export function Sidebar({
 								<rect x="8" y="8" width="8" height="8" rx="1" fill="currentColor" />
 							</svg>
 						</div>
-						<button className={sidebarIconBtn} onClick={onNewSession} type="button" aria-label="New session">
-							<Plus size={18} />
-						</button>
 					</div>
-					<div className={iconStripBottom}>
-						<button className={sidebarIconBtn} type="button" aria-label="Settings">
-							<Settings size={18} />
-						</button>
-						<button className={sidebarIconBtn} type="button" aria-label="Help">
-							<HelpCircle size={18} />
-						</button>
-					</div>
+					<div className={iconStripBottom} />
 				</div>
 
 				{/* Right content panel */}
@@ -236,9 +226,6 @@ export function Sidebar({
 							<span className={titleText}>pi</span>
 							<span className={subtitleText}>{currentCwd ? shortenPath(currentCwd) : "~/workspace"}</span>
 						</div>
-						<button className={iconBtn} type="button">
-							<MoreHorizontal size={16} />
-						</button>
 					</div>
 
 					<button

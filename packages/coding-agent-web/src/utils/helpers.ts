@@ -142,23 +142,3 @@ export const iconBtn = css`
 		cursor: default;
 	}
 `;
-
-export const toolbarItem = css`
-	display: inline-flex;
-	align-items: center;
-	gap: 4px;
-	padding: 4px 10px;
-	border-radius: 0.375rem;
-	font-size: 13px;
-	font-weight: 500;
-	color: var(--color-oc-fg-muted);
-	cursor: pointer;
-	white-space: nowrap;
-	&:hover {
-		color: var(--color-oc-fg);
-		background-color: var(--color-oc-muted-bg);
-	}
-	& svg {
-		flex-shrink: 0;
-	}
-`;
