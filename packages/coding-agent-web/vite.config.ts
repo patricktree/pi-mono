@@ -3,8 +3,17 @@ import wyw from "@wyw-in-js/vite";
 import path from "node:path";
 import { defineConfig } from "vite";
 
-export default defineConfig({
-	plugins: [react(), wyw({ include: ["**/*.{ts,tsx}"] })],
+export default defineConfig(({ mode }) => ({
+	plugins: [
+		react(),
+		wyw({
+			include: ["**/*.{ts,tsx}"],
+			displayName: mode === "development",
+			...(mode === "development" && {
+				classNameSlug: "[name]__[title]__[hash]",
+			}),
+		}),
+	],
 	resolve: {
 		alias: {
 			"@": path.resolve(__dirname, "./src"),
@@ -18,4 +27,4 @@ export default defineConfig({
 			},
 		},
 	},
-});
+}));
