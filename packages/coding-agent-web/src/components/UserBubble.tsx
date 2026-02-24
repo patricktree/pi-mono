@@ -3,6 +3,7 @@ import type { UiMessage } from "../state/store.js";
 
 const bubbleRow = css`
 	display: flex;
+	justify-content: flex-end;
 `;
 
 const bubble = css`

@@ -39,6 +39,7 @@ const mainScroller = css`
 	flex: 1 1 0%;
 	min-height: 0;
 	overflow-y: auto;
+	padding-block-start: 12px;
 `;
 
 const footerStyle = css`
