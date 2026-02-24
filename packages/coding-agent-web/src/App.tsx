@@ -9,7 +9,7 @@ import { ScheduledMessages } from "./components/ScheduledMessages.js";
 import { SessionTitleBar } from "./components/SessionTitleBar.js";
 import { Sidebar } from "./components/Sidebar.js";
 import { TabBar, type TabId } from "./components/TabBar.js";
-import { MockTransport } from "./mock/mock-transport.js";
+import { createScenarioTransport } from "./mock/create-scenario-transport.js";
 import { SCENARIOS } from "./mock/scenarios.js";
 import { ProtocolClient } from "./protocol/client.js";
 import type { ExtensionUiRequestEvent, ImageContent, ServerEvent, SessionSummary } from "./protocol/types.js";
@@ -175,9 +175,10 @@ export function App() {
 			const scenarioName = mockParam || "default";
 			const scenario = SCENARIOS[scenarioName] ?? SCENARIOS.default;
 			log(`mock mode (scenario: ${scenarioName})`);
-			transport = new MockTransport(scenario, { log });
-			mockAutoPrompt = scenario.autoPrompt;
-			mockAutoSteeringPrompt = scenario.autoSteeringPrompt;
+			const result = createScenarioTransport(scenario, { log });
+			transport = result.transport;
+			mockAutoPrompt = result.autoPrompt;
+			mockAutoSteeringPrompt = result.autoSteeringPrompt;
 		} else {
 			transport = new WsClient(getWebSocketUrl(), { log, warn, error });
 		}

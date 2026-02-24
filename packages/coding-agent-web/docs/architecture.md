@@ -24,8 +24,8 @@ src/
 │   ├── transport.ts          Transport interface
 │   └── ws-client.ts          WebSocket transport implementation
 ├── mock/
-│   ├── mock-transport.ts     Mock transport for offline development
-│   └── scenarios.ts          Canned replay scenarios
+│   ├── create-scenario-transport.ts  Factory for visual dev mock transport
+│   └── scenarios.ts                  Canned replay scenarios
 └── state/
     └── store.ts              AppStore (immutable pub/sub state)
 ```
@@ -37,7 +37,9 @@ src/
 `Transport` abstracts backend communication. Two implementations exist:
 
 - **`WsClient`** — real WebSocket transport, request/response correlation, timeouts, status callbacks.
-- **`MockTransport`** — scenario replay transport for UI development without a backend.
+- **`TestTransport`** — configurable transport for automated tests and visual dev. Supports instant or async connect, per-command request handlers, request recording, synchronous event emission, and timed scenario replay.
+
+The `createScenarioTransport()` factory in `src/mock/create-scenario-transport.ts` configures a `TestTransport` with mock session data and scenario replay for visual dev mode.
 
 Everything above this layer is transport-agnostic.
 

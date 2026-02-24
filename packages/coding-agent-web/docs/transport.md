@@ -36,9 +36,26 @@ Every command gets an ID (`req_1`, `req_2`, ...). When a matching `response` arr
 - non-object/non-text frames are ignored
 - connection drops reject all pending requests
 
-## `MockTransport` (offline UI transport)
+## `TestTransport` (test and offline UI transport)
 
-Used via `?mock` query parameters. It simulates server behavior by replaying scenario events with delays.
+`TestTransport` is a single `Transport` implementation used for both automated tests and visual dev mode (`?mock` query parameter).
+
+It provides:
+
+- **Instant or async connect** — `connect()` for tests, `connectAsync(delayMs)` for visual dev
+- **Configurable request handlers** — per-command-type handlers via `handleRequest(type, fn)`
+- **Request recording** — all `request()` calls captured for test assertions
+- **Synchronous event emission** — `emitEvent()` / `emitEvents()` for tests
+- **Timed replay** — `replayWithTiming(steps)` for scenario playback with delays
+
+### Visual dev mode
+
+The factory function `createScenarioTransport(scenario, logger)` in `src/mock/create-scenario-transport.ts` configures a `TestTransport` with:
+
+- Mock session data (session list, per-session message history)
+- `prompt` handler that triggers timed scenario replay
+- `abort` handler that cancels replay
+- Async connect with a short delay to simulate WebSocket handshake
 
 Built-in scenarios:
 
@@ -46,9 +63,11 @@ Built-in scenarios:
 - `error`
 - `multi-tool`
 - `long`
+- `interleaved`
+- `in-progress`
+- `thinking`
 - `steering`
-
-It also returns mock data for RPC-style commands (`list_sessions`, `get_messages`, `get_state`, etc.) so the full UI can be exercised without a backend.
+- `empty`
 
 ## Scenario Model
 

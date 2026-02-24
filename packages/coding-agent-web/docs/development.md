@@ -35,7 +35,7 @@ node packages/coding-agent/dist/cli.js --mode web --port 4781 --web-allowed-orig
 npm run dev:mock
 ```
 
-Opens the browser with `?mock=default`, which replays canned events through `MockTransport`.
+Opens the browser with `?mock=default`, which replays canned events through a `TestTransport` configured by `createScenarioTransport()`.
 
 | URL | Scenario |
 | --- | --- |
@@ -93,7 +93,8 @@ Runs Biome and TypeScript (`tsc --noEmit`).
 | `src/protocol/client.ts` | Typed protocol client |
 | `src/transport/transport.ts` | Transport interface |
 | `src/transport/ws-client.ts` | WebSocket transport |
-| `src/mock/mock-transport.ts` | Mock transport |
+| `src/mock/create-scenario-transport.ts` | Factory for visual dev mock transport |
+| `src/transport/test-transport.ts` | Test/mock transport implementation |
 | `src/mock/scenarios.ts` | Mock scenario definitions |
 
 ## Main Dependencies

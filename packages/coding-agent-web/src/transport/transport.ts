@@ -4,8 +4,8 @@ export type EventListener = (event: ServerEvent) => void;
 export type StatusListener = (connected: boolean) => void;
 
 /**
- * Shared interface for real WebSocket and mock transports.
- * Both `WsClient` and `MockTransport` implement this so the rest of the app
+ * Shared interface for real and test transports.
+ * Both `WsClient` and `TestTransport` implement this so the rest of the app
  * is transport-agnostic.
  */
 export interface Transport {

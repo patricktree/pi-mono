@@ -40,7 +40,7 @@ node packages/coding-agent/dist/cli.js --mode web --port 4781 --web-allowed-orig
 npm run dev:mock
 ```
 
-This opens the browser with `?mock=default`, which replays canned events through `MockTransport`.
+This opens the browser with `?mock=default`, which replays canned events through a `TestTransport` configured by `createScenarioTransport()`.
 
 Available mock scenarios:
 
