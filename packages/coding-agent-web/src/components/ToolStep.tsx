@@ -150,6 +150,18 @@ const bashOutput = css`
 	color: var(--color-oc-fg-muted);
 `;
 
+const truncationIndicator = css`
+	color: var(--color-oc-fg-muted);
+	font-style: italic;
+`;
+
+const exitCodeLine = css`
+	color: var(--color-oc-error);
+	font-weight: 600;
+`;
+
+const PREVIEW_LINES = 20;
+
 export function renderStep(
 	message: UiMessage,
 	expandedTools: Set<string>,
@@ -242,9 +254,7 @@ function ToolStep({
 			{isExpanded && (bashCommandPrefix(step) || step.result) ? (
 				<div className={expandedContent}>
 					<pre className={codeBlock}>
-						{bashCommandPrefix(step) ? <code className={bashCommandLine}>{bashCommandPrefix(step)}</code> : null}
-						{bashCommandPrefix(step) && step.result ? "\n" : null}
-						{step.result ? <code>{step.result}</code> : null}
+						{renderToolOutput(step)}
 					</pre>
 				</div>
 			) : null}
@@ -316,6 +326,108 @@ function bashCommandPrefix(step: ToolStepData): string | undefined {
 		// ignore
 	}
 	return undefined;
+}
+
+/**
+ * Parse bash result text to extract exit/error message from the output.
+ * The bash tool appends messages like "Command exited with code N" at the end.
+ */
+function parseBashResult(text: string, isError: boolean): { output: string; exitMessage: string | null } {
+	if (!isError) return { output: text, exitMessage: null };
+
+	const exitMatch = text.match(/\n\n(Command exited with code \d+)$/);
+	if (exitMatch) {
+		return { output: text.slice(0, exitMatch.index!), exitMessage: exitMatch[1] };
+	}
+
+	const timeoutMatch = text.match(/\n\n(Command timed out after \d+ seconds)$/);
+	if (timeoutMatch) {
+		return { output: text.slice(0, timeoutMatch.index!), exitMessage: timeoutMatch[1] };
+	}
+
+	const abortMatch = text.match(/\n\n(Command aborted)$/);
+	if (abortMatch) {
+		return { output: text.slice(0, abortMatch.index!), exitMessage: abortMatch[1] };
+	}
+
+	return { output: text, exitMessage: null };
+}
+
+/**
+ * Truncate lines from the beginning (tail mode) or end (head mode).
+ */
+function truncateOutput(
+	text: string,
+	maxLines: number,
+	mode: "head" | "tail",
+): { lines: string[]; skipped: number; position: "start" | "end" | null } {
+	const allLines = text.split("\n");
+	if (allLines.length <= maxLines) {
+		return { lines: allLines, skipped: 0, position: null };
+	}
+	if (mode === "tail") {
+		return {
+			lines: allLines.slice(-maxLines),
+			skipped: allLines.length - maxLines,
+			position: "start",
+		};
+	}
+	return {
+		lines: allLines.slice(0, maxLines),
+		skipped: allLines.length - maxLines,
+		position: "end",
+	};
+}
+
+/**
+ * Render tool output with truncation.
+ * Bash: tail truncation (show last N lines) + exit code display.
+ * Other tools: head truncation (show first N lines).
+ */
+function renderToolOutput(step: ToolStepData) {
+	const isBash = step.toolName === "bash";
+	const command = bashCommandPrefix(step);
+	const result = (step.result || "").trimEnd();
+
+	if (isBash) {
+		const { output, exitMessage } = parseBashResult(result, step.phase === "error");
+		const { lines, skipped, position } = truncateOutput(output.trimEnd(), PREVIEW_LINES, "tail");
+		const hasOutput = output.trim().length > 0;
+
+		return (
+			<>
+				{command ? <code className={bashCommandLine}>{command}</code> : null}
+				{command && (hasOutput || exitMessage) ? "\n" : null}
+				{position === "start" ? (
+					<>
+						<span className={truncationIndicator}>{`... (${skipped} earlier lines)`}</span>
+						{"\n"}
+					</>
+				) : null}
+				{hasOutput ? <code>{lines.join("\n")}</code> : null}
+				{exitMessage ? (
+					<>
+						{hasOutput ? "\n\n" : ""}
+						<span className={exitCodeLine}>{exitMessage}</span>
+					</>
+				) : null}
+			</>
+		);
+	}
+
+	// Non-bash tools: tail truncation (keep last N lines)
+	const { lines, skipped, position } = truncateOutput(result, PREVIEW_LINES, "tail");
+	return (
+		<>
+			{position === "start" ? (
+				<>
+					<span className={truncationIndicator}>{`... (${skipped} earlier lines)`}</span>
+					{"\n"}
+				</>
+			) : null}
+			<code>{lines.join("\n")}</code>
+		</>
+	);
 }
 
 

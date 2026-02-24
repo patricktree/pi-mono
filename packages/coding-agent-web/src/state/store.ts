@@ -248,14 +248,13 @@ export class AppStore {
 				}
 				case "toolResult": {
 					const resultText = msg.content.map((c) => c.text).join("");
-					const preview = resultText.length > 300 ? `${resultText.slice(0, 300)}...` : resultText;
 					const phase = msg.isError ? "error" : "done";
 
 					// Try to update the matching tool step in-place
 					const toolStep = toolStepMap.get(msg.toolCallId);
 					if (toolStep?.toolStep) {
 						toolStep.toolStep.phase = phase;
-						toolStep.toolStep.result = preview;
+						toolStep.toolStep.result = resultText;
 					}
 					break;
 				}
@@ -440,8 +439,8 @@ export class AppStore {
 
 	private applyToolExecutionEnd(event: ToolExecutionEndEvent): void {
 		if (this.activeToolStepId) {
-			const preview = toPreviewString(event.result, 300);
-			this.updateToolStepPhase(this.activeToolStepId, event.isError ? "error" : "done", preview);
+			const fullText = extractResultText(event.result);
+			this.updateToolStepPhase(this.activeToolStepId, event.isError ? "error" : "done", fullText);
 			this.activeToolStepId = null;
 		}
 	}
@@ -535,11 +534,6 @@ function convertAssistantPart(part: AssistantContent, toolStepMap: Map<string, U
 			return [msg];
 		}
 	}
-}
-
-function toPreviewString(value: unknown, maxLength: number): string {
-	const text = extractResultText(value);
-	return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
 }
 
 /** Extract plain text from a tool result, which may be a string, a content array, or an arbitrary object. */
