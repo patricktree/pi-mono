@@ -1,5 +1,6 @@
 import type { Transport } from "../transport/transport.js";
 import type {
+	BashResult,
 	ContextUsage,
 	ExtensionUiResponse,
 	HistoryMessage,
@@ -101,6 +102,26 @@ export class ProtocolClient {
 		}
 		const data = response.data as { usage?: ContextUsage };
 		return data.usage;
+	}
+
+	async bash(command: string): Promise<BashResult> {
+		const response = await this.transport.request({
+			type: "bash",
+			command,
+		});
+		if (!response.success) {
+			throw new Error(response.error ?? "bash command failed");
+		}
+		return response.data as BashResult;
+	}
+
+	async abortBash(): Promise<void> {
+		const response = await this.transport.request({
+			type: "abort_bash",
+		});
+		if (!response.success) {
+			throw new Error(response.error ?? "abort_bash failed");
+		}
 	}
 
 	sendExtensionUiResponse(response: ExtensionUiResponse): void {

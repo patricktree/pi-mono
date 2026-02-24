@@ -98,6 +98,8 @@ class ProtocolClient {
   }): Promise<RpcResponse>;
   abort(): Promise<RpcResponse>;
   clearQueue(): Promise<RpcResponse>;
+  bash(command: string): Promise<BashResult>;
+  abortBash(): Promise<void>;
   listSessions(scope?: "cwd" | "all"): Promise<SessionSummary[]>;
   switchSession(sessionPath: string): Promise<void>;
   newSession(): Promise<void>;

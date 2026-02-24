@@ -1,6 +1,7 @@
 import { css, cx } from "@linaria/core";
 import { Plus, Square, X } from "lucide-react";
 import { useCallback, useEffect, useRef } from "react";
+import type { InputMode } from "./BottomToolbar.js";
 import type { ImageContent } from "../protocol/types.js";
 import { iconBtn, isTouchDevice, readFileAsBase64, warn } from "../utils/helpers.js";
 
@@ -127,24 +128,28 @@ const sendBtnInactive = css`
 `;
 
 export function PromptInput({
+	mode,
 	prompt,
 	streaming,
 	connected,
 	hasContent,
 	pendingImages,
 	onPromptChange,
+	onModeChange,
 	onSend,
 	onAbort,
 	onAddImages,
 	onRemoveImage,
 	onError,
 }: {
+	mode: InputMode;
 	prompt: string;
 	streaming: boolean;
 	connected: boolean;
 	hasContent: boolean;
 	pendingImages: ImageContent[];
 	onPromptChange: (value: string) => void;
+	onModeChange: (mode: InputMode) => void;
 	onSend: () => void;
 	onAbort: () => void;
 	onAddImages: (images: ImageContent[]) => void;
@@ -159,6 +164,20 @@ export function PromptInput({
 		promptRef.current.style.height = "auto";
 		promptRef.current.style.height = `${Math.min(promptRef.current.scrollHeight, 200)}px`;
 	}, [prompt]);
+
+	const handleChange = useCallback(
+		(text: string) => {
+			onPromptChange(text);
+			// Auto-switch to shell mode when typing "!" at start, back to prompt when removed
+			const isBash = text.trimStart().startsWith("!");
+			if (isBash && mode === "prompt") {
+				onModeChange("shell");
+			} else if (!isBash && mode === "shell") {
+				onModeChange("prompt");
+			}
+		},
+		[mode, onModeChange, onPromptChange],
+	);
 
 	const onPromptKeyDown = useCallback(
 		(event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -244,48 +263,58 @@ export function PromptInput({
 			<textarea
 				className={textareaStyle}
 				disabled={!connected}
-				onChange={(event) => onPromptChange(event.currentTarget.value)}
+				onChange={(event) => handleChange(event.currentTarget.value)}
 				onKeyDown={onPromptKeyDown}
-				placeholder={streaming ? "Send a steering message..." : hasContent ? "Ask anything..." : 'Ask anything... "Help me write a migration script"'}
+				placeholder={
+					mode === "shell"
+						? "Enter shell command..."
+						: streaming
+							? "Send a steering message..."
+							: hasContent
+								? "Ask anything..."
+								: 'Ask anything... "Help me write a migration script"'
+				}
 				ref={promptRef}
 				rows={1}
 				value={prompt}
 			/>
 
-			<div className={bottomRow}>
-				<div className={actionGroup}>
-					<button
-						className={iconBtn}
-						disabled={!connected}
-						onClick={onAttachImage}
-						type="button"
-						aria-label="Attach image"
-					>
-						<Plus size={18} />
-					</button>
-					{streaming ? (
+			{mode === "prompt" ? (
+				<div className={bottomRow}>
+					<div className={actionGroup}>
 						<button
-							className={squareBtn}
-							onClick={onAbort}
+							className={iconBtn}
+							disabled={!connected}
+							onClick={onAttachImage}
 							type="button"
+							aria-label="Attach image"
 						>
-							<Square size={14} />
+							<Plus size={18} />
 						</button>
-					) : null}
-					<button
-						className={cx(sendBtn, hasPromptContent ? sendBtnActive : sendBtnInactive)}
-						disabled={!connected || !hasPromptContent}
-						onClick={onSend}
-						type="button"
-						aria-label="Send"
-					>
-						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-							<line x1="12" y1="19" x2="12" y2="5" />
-							<polyline points="5 12 12 5 19 12" />
-						</svg>
-					</button>
+						{streaming ? (
+							<button
+								className={squareBtn}
+								onClick={onAbort}
+								type="button"
+							>
+								<Square size={14} />
+							</button>
+						) : null}
+						<button
+							className={cx(sendBtn, hasPromptContent ? sendBtnActive : sendBtnInactive)}
+							disabled={!connected || !hasPromptContent}
+							onClick={onSend}
+							type="button"
+							aria-label="Send"
+						>
+							<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+								<line x1="12" y1="19" x2="12" y2="5" />
+								<polyline points="5 12 12 5 19 12" />
+							</svg>
+						</button>
+					</div>
 				</div>
-			</div>
+			) : null}
 		</div>
 	);
 }

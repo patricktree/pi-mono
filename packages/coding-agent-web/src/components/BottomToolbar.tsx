@@ -1,5 +1,7 @@
-import { css } from "@linaria/core";
-import { Monitor, Terminal } from "lucide-react";
+import { css, cx } from "@linaria/core";
+import { MessageSquare, Terminal } from "lucide-react";
+
+export type InputMode = "prompt" | "shell";
 
 const toolbarRow = css`
 	display: flex;
@@ -16,32 +18,61 @@ const spacer = css`
 	flex: 1 1 0%;
 `;
 
-const smallIconBtn = css`
+const toggleGroup = css`
+	display: flex;
+	align-items: center;
+	gap: 2px;
+`;
+
+const toggleBtn = css`
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
 	width: 28px;
 	height: 28px;
 	border-radius: 0.375rem;
-	color: var(--color-oc-fg-muted);
 	cursor: pointer;
 	flex-shrink: 0;
+	color: var(--color-oc-fg-faint);
 	&:hover {
 		background-color: var(--color-oc-muted-bg);
 		color: var(--color-oc-fg);
 	}
 `;
 
-export function BottomToolbar() {
+const toggleBtnActive = css`
+	color: var(--color-oc-fg);
+`;
+
+export function BottomToolbar({
+	mode,
+	onModeChange,
+}: {
+	mode: InputMode;
+	onModeChange: (mode: InputMode) => void;
+}) {
 	return (
 		<div className={toolbarRow}>
 			<div className={spacer} />
-			<button className={smallIconBtn} type="button">
-				<Terminal size={16} />
-			</button>
-			<button className={smallIconBtn} type="button">
-				<Monitor size={16} />
-			</button>
+
+			<div className={toggleGroup}>
+				<button
+					className={cx(toggleBtn, mode === "shell" && toggleBtnActive)}
+					onClick={() => onModeChange("shell")}
+					type="button"
+					aria-label="Shell mode"
+				>
+					<Terminal size={16} />
+				</button>
+				<button
+					className={cx(toggleBtn, mode === "prompt" && toggleBtnActive)}
+					onClick={() => onModeChange("prompt")}
+					type="button"
+					aria-label="Prompt mode"
+				>
+					<MessageSquare size={16} />
+				</button>
+			</div>
 		</div>
 	);
 }

@@ -1,6 +1,6 @@
 import { css } from "@linaria/core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BottomToolbar } from "./components/BottomToolbar.js";
+import { BottomToolbar, type InputMode } from "./components/BottomToolbar.js";
 import { Header } from "./components/Header.js";
 import { MessageList } from "./components/MessageList.js";
 import { PromptInput } from "./components/PromptInput.js";
@@ -53,6 +53,7 @@ export function App() {
 	const [collapsedTurns, setCollapsedTurns] = useState<Set<string>>(new Set());
 	const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
 	const [pendingImages, setPendingImages] = useState<ImageContent[]>([]);
+	const [inputMode, setInputMode] = useState<InputMode>("prompt");
 
 	const scrollerRef = useRef<HTMLDivElement | null>(null);
 	const storeRef = useRef(new AppStore());
@@ -224,11 +225,48 @@ export function App() {
 		}
 	}, [appState.messages, appState.streaming]);
 
+	const sendBashCommand = useCallback(async () => {
+		const protocolClient = protocolRef.current;
+		if (!protocolClient || !appState.connected) return;
+
+		let command = prompt.trim();
+		if (!command) return;
+
+		// Strip leading "!" (or "!!" for exclude-from-context, treat the same for now)
+		if (command.startsWith("!!")) {
+			command = command.slice(2).trim();
+		} else if (command.startsWith("!")) {
+			command = command.slice(1).trim();
+		}
+		if (!command) return;
+
+		setPrompt("");
+		setInputMode("prompt");
+
+		try {
+			const result = await protocolClient.bash(command);
+			storeRef.current.addBashResultMessage(command, result.output, result.exitCode);
+		} catch (bashError) {
+			const messageText = bashError instanceof Error ? bashError.message : String(bashError);
+			storeRef.current.addErrorMessage(`Bash error: ${messageText}`);
+		}
+	}, [appState.connected, prompt]);
+
 	const sendPrompt = useCallback(async () => {
+		if (inputMode === "shell") {
+			return sendBashCommand();
+		}
+
 		const protocolClient = protocolRef.current;
 		if (!protocolClient) return;
 
 		const message = prompt.trim();
+
+		// Auto-detect "!" prefix in prompt mode
+		if (message.startsWith("!")) {
+			return sendBashCommand();
+		}
+
 		const images = pendingImages.length > 0 ? [...pendingImages] : undefined;
 		if ((!message && !images) || !appState.connected) return;
 
@@ -251,7 +289,7 @@ export function App() {
 			const messageText = sendError instanceof Error ? sendError.message : String(sendError);
 			storeRef.current.addErrorMessage(`Failed to send prompt: ${messageText}`);
 		}
-	}, [appState.connected, appState.streaming, pendingImages, prompt]);
+	}, [appState.connected, appState.streaming, inputMode, pendingImages, prompt, sendBashCommand]);
 
 	const dequeueScheduledMessages = useCallback(async () => {
 		const protocolClient = protocolRef.current;
@@ -386,19 +424,21 @@ export function App() {
 			{/* Footer: prompt input + toolbar */}
 			<footer className={footerStyle}>
 				<PromptInput
+					mode={inputMode}
 					prompt={prompt}
 					streaming={appState.streaming}
 					connected={appState.connected}
 					hasContent={hasContent}
 					pendingImages={pendingImages}
 					onPromptChange={setPrompt}
+					onModeChange={setInputMode}
 					onSend={() => void sendPrompt()}
 					onAbort={() => void abortPrompt()}
 					onAddImages={(images) => setPendingImages((current) => [...current, ...images])}
 					onRemoveImage={(index) => setPendingImages((current) => current.filter((_, i) => i !== index))}
 					onError={(message) => storeRef.current.addErrorMessage(message)}
 				/>
-				<BottomToolbar />
+				<BottomToolbar mode={inputMode} onModeChange={setInputMode} />
 			</footer>
 		</div>
 	);

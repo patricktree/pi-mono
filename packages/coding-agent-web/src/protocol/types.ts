@@ -250,6 +250,25 @@ export interface GetContextUsageCommand {
 	type: "get_context_usage";
 }
 
+export interface BashCommand {
+	id?: string;
+	type: "bash";
+	command: string;
+}
+
+export interface AbortBashCommand {
+	id?: string;
+	type: "abort_bash";
+}
+
+export interface BashResult {
+	output: string;
+	exitCode: number | undefined;
+	cancelled: boolean;
+	truncated: boolean;
+	fullOutputPath?: string;
+}
+
 export type ClientCommand =
 	| PromptCommand
 	| AbortCommand
@@ -259,7 +278,9 @@ export type ClientCommand =
 	| NewSessionCommand
 	| GetStateCommand
 	| GetMessagesCommand
-	| GetContextUsageCommand;
+	| GetContextUsageCommand
+	| BashCommand
+	| AbortBashCommand;
 
 export type ExtensionUiResponse =
 	| { type: "extension_ui_response"; id: string; cancelled: true }

@@ -14,7 +14,7 @@ import type {
 	ToolExecutionStartEvent,
 } from "../protocol/types.js";
 
-export type UiMessageKind = "user" | "assistant" | "thinking" | "tool" | "error" | "system";
+export type UiMessageKind = "user" | "assistant" | "thinking" | "tool" | "error" | "system" | "bash";
 
 export type ToolStepPhase = "calling" | "running" | "done" | "error";
 
@@ -26,12 +26,20 @@ export interface ToolStepData {
 	result?: string;
 }
 
+export interface BashResultData {
+	command: string;
+	output: string;
+	exitCode: number | undefined;
+}
+
 export interface UiMessage {
 	id: string;
 	kind: UiMessageKind;
 	text: string;
 	/** Present only when kind === "tool". */
 	toolStep?: ToolStepData;
+	/** Present only when kind === "bash". */
+	bashResult?: BashResultData;
 	/** Attached images, present on user messages with image attachments. */
 	images?: ImageContent[];
 }
@@ -147,6 +155,25 @@ export class AppStore {
 
 	addErrorMessage(text: string): void {
 		this.pushMessage("error", text);
+	}
+
+	addSystemMessage(text: string): void {
+		this.pushMessage("system", text);
+	}
+
+	addBashResultMessage(command: string, output: string, exitCode: number | undefined): void {
+		nextMessageId += 1;
+		const msg: UiMessage = {
+			id: `msg_${nextMessageId}`,
+			kind: "bash",
+			text: `$ ${command}\n${output}`,
+			bashResult: { command, output, exitCode },
+		};
+		this.state = {
+			...this.state,
+			messages: [...this.state.messages, msg],
+		};
+		this.emit();
 	}
 
 	// ------------------------------------------------------------------

@@ -1,6 +1,6 @@
 import { css } from "@linaria/core";
 import { ChevronDown, LoaderCircle } from "lucide-react";
-import type { ToolStepData, UiMessage } from "../state/store.js";
+import type { BashResultData, ToolStepData, UiMessage } from "../state/store.js";
 import { Markdown } from "./Markdown.js";
 
 const toolText = css`
@@ -13,9 +13,11 @@ const errorText = css`
 `;
 
 const systemText = css`
+	font-family: var(--font-mono);
 	font-size: 0.75rem;
 	line-height: 1rem;
 	color: var(--color-oc-fg-muted);
+	white-space: pre-wrap;
 `;
 
 const toolStepRoot = css`
@@ -81,6 +83,29 @@ const codeBlock = css`
 	color: var(--color-oc-fg);
 `;
 
+const bashBox = css`
+	border: 1px solid var(--color-oc-border);
+	border-radius: var(--radius-oc);
+	background-color: var(--color-oc-card);
+	padding: 12px 16px;
+	font-family: var(--font-mono);
+	font-size: 13px;
+	line-height: 1.5;
+	white-space: pre-wrap;
+	word-break: break-all;
+	overflow-x: auto;
+	color: var(--color-oc-fg);
+`;
+
+const bashCommand = css`
+	font-weight: 600;
+	margin-bottom: 4px;
+`;
+
+const bashOutput = css`
+	color: var(--color-oc-fg-muted);
+`;
+
 export function renderStep(
 	message: UiMessage,
 	expandedTools: Set<string>,
@@ -94,6 +119,12 @@ export function renderStep(
 				<ToolStep step={message.toolStep} messageId={message.id} expandedTools={expandedTools} setExpandedTools={setExpandedTools} />
 			) : (
 				<p className={toolText}>{message.text}</p>
+			);
+		case "bash":
+			return message.bashResult ? (
+				<BashResultBox result={message.bashResult} />
+			) : (
+				<pre className={bashBox}>{message.text}</pre>
 			);
 		case "error":
 			return <p className={errorText}>{message.text}</p>;
@@ -160,6 +191,15 @@ function ToolStep({
 					</pre>
 				</div>
 			) : null}
+		</div>
+	);
+}
+
+function BashResultBox({ result }: { result: BashResultData }) {
+	return (
+		<div className={bashBox}>
+			<div className={bashCommand}>$ {result.command}</div>
+			{result.output ? <div className={bashOutput}>{result.output}</div> : null}
 		</div>
 	);
 }

@@ -120,6 +120,38 @@ Fetch current context-window usage.
 {"id":"req_9","type":"get_context_usage"}
 ```
 
+### `bash`
+
+Execute a shell command directly (user-initiated, not agent tool use).
+
+```json
+{"id":"req_10","type":"bash","command":"ls -la"}
+```
+
+Returns a `BashResult` in `data`:
+
+```json
+{
+  "type": "response",
+  "command": "bash",
+  "success": true,
+  "data": {
+    "output": "total 8\ndrwxr-xr-x ...",
+    "exitCode": 0,
+    "cancelled": false,
+    "truncated": false
+  }
+}
+```
+
+### `abort_bash`
+
+Abort a running user-initiated bash command.
+
+```json
+{"id":"req_11","type":"abort_bash"}
+```
+
 ## Events (Server → Client)
 
 All events are broadcast to connected web clients.

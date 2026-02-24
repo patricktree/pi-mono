@@ -87,14 +87,27 @@ When the user sends a message while the agent is streaming, it is queued as a st
 
 When the server interweaves a steering message, it is moved from this section into the main message timeline.
 
+## Input mode (prompt / shell)
+
+The prompt dock supports two modes, toggled via the bottom toolbar:
+
+- **Prompt mode** — sends messages to the agent. Shows image attachment (+) and send buttons. Placeholder: "Ask anything...".
+- **Shell mode** — executes bash commands directly on the server. Hides the attachment and send buttons. Placeholder: "Enter shell command...".
+
+The toolbar below the input shows two toggle buttons on the right: a terminal icon (shell mode) and a message icon (prompt mode). The active mode button is highlighted.
+
+Typing `!` at the start of the input auto-switches to shell mode. Removing the `!` prefix switches back to prompt mode. Submitting with a `!` prefix in prompt mode also executes as a bash command (matching the TUI `!command` behavior).
+
+Shell output is displayed as a monospace system message. Non-zero exit codes are shown as a prefix (e.g. `[exit 1]`).
+
 ## Prompt dock behavior
 
 The sticky prompt dock includes:
 
 - auto-growing textarea (`max-height: 200px`)
-- image attachment button + file picker
+- image attachment button + file picker (prompt mode only)
 - context usage ring
-- send / stop controls
+- send / stop controls (prompt mode only)
 
 The prompt input and attachment button remain enabled while the agent is streaming. Messages sent during streaming are dispatched as steering messages. Both the send button and the stop button are visible during streaming.
 
