@@ -273,10 +273,10 @@ export function PromptInput({
 
 			<textarea
 				className={textareaStyle}
-				disabled={streaming || !connected}
+				disabled={!connected}
 				onChange={(event) => onPromptChange(event.currentTarget.value)}
 				onKeyDown={onPromptKeyDown}
-				placeholder={hasContent ? "Ask anything..." : 'Ask anything... "Help me write a migration script"'}
+				placeholder={streaming ? "Send a steering message..." : hasContent ? "Ask anything..." : 'Ask anything... "Help me write a migration script"'}
 				ref={promptRef}
 				rows={1}
 				value={prompt}
@@ -299,7 +299,7 @@ export function PromptInput({
 				<div className={actionGroup}>
 					<button
 						className={iconBtn}
-						disabled={streaming || !connected}
+						disabled={!connected}
 						onClick={onAttachImage}
 						type="button"
 						aria-label="Attach image"
@@ -314,20 +314,19 @@ export function PromptInput({
 						>
 							<Square size={14} />
 						</button>
-					) : (
-						<button
-							className={cx(sendBtn, hasPromptContent ? sendBtnActive : sendBtnInactive)}
-							disabled={!connected || !hasPromptContent}
-							onClick={onSend}
-							type="button"
-							aria-label="Send"
-						>
-							<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-								<line x1="12" y1="19" x2="12" y2="5" />
-								<polyline points="5 12 12 5 19 12" />
-							</svg>
-						</button>
-					)}
+					) : null}
+					<button
+						className={cx(sendBtn, hasPromptContent ? sendBtnActive : sendBtnInactive)}
+						disabled={!connected || !hasPromptContent}
+						onClick={onSend}
+						type="button"
+						aria-label="Send"
+					>
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+							<line x1="12" y1="19" x2="12" y2="5" />
+							<polyline points="5 12 12 5 19 12" />
+						</svg>
+					</button>
 				</div>
 			</div>
 		</div>

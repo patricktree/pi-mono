@@ -5,6 +5,7 @@ import { ChangesPanel } from "./components/ChangesPanel.js";
 import { Header } from "./components/Header.js";
 import { MessageList } from "./components/MessageList.js";
 import { PromptInput } from "./components/PromptInput.js";
+import { ScheduledMessages } from "./components/ScheduledMessages.js";
 import { SessionTitleBar } from "./components/SessionTitleBar.js";
 import { Sidebar } from "./components/Sidebar.js";
 import { TabBar, type TabId } from "./components/TabBar.js";
@@ -21,6 +22,7 @@ const INITIAL_STATE: AppState = {
 	connected: false,
 	streaming: false,
 	messages: [],
+	scheduledMessages: [],
 	sessions: [],
 	currentSessionId: null,
 	sidebarOpen: false,
@@ -120,7 +122,7 @@ export function App() {
 	}, []);
 
 	const onConnected = useCallback(
-		async (mockAutoPrompt?: string) => {
+		async (mockAutoPrompt?: string, mockAutoSteeringPrompt?: string) => {
 			const protocolClient = protocolRef.current;
 			if (!protocolClient) return;
 
@@ -150,6 +152,9 @@ export function App() {
 			if (mockAutoPrompt) {
 				storeRef.current.addUserMessage(mockAutoPrompt);
 			}
+			if (mockAutoSteeringPrompt) {
+				storeRef.current.addUserMessage(mockAutoSteeringPrompt, { scheduled: true });
+			}
 		},
 		[refreshContextUsage],
 	);
@@ -163,6 +168,7 @@ export function App() {
 		const params = new URLSearchParams(window.location.search);
 		const mockParam = params.get("mock");
 		let mockAutoPrompt: string | undefined;
+		let mockAutoSteeringPrompt: string | undefined;
 
 		let transport: Transport;
 		if (mockParam !== null) {
@@ -171,6 +177,7 @@ export function App() {
 			log(`mock mode (scenario: ${scenarioName})`);
 			transport = new MockTransport(scenario, { log });
 			mockAutoPrompt = scenario.autoPrompt;
+			mockAutoSteeringPrompt = scenario.autoSteeringPrompt;
 		} else {
 			transport = new WsClient(getWebSocketUrl(), { log, warn, error });
 		}
@@ -194,8 +201,9 @@ export function App() {
 		const unsubscribeStatus = transport.onStatus((connected) => {
 			store.setConnected(connected);
 			if (connected) {
-				void onConnected(mockAutoPrompt);
+				void onConnected(mockAutoPrompt, mockAutoSteeringPrompt);
 				mockAutoPrompt = undefined;
+				mockAutoSteeringPrompt = undefined;
 			}
 		});
 
@@ -224,14 +232,20 @@ export function App() {
 
 		const message = prompt.trim();
 		const images = pendingImages.length > 0 ? [...pendingImages] : undefined;
-		if ((!message && !images) || appState.streaming || !appState.connected) return;
+		if ((!message && !images) || !appState.connected) return;
 
-		storeRef.current.addUserMessage(message || "(image attachment)", images);
+		storeRef.current.addUserMessage(message || "(image attachment)", {
+			images,
+			scheduled: appState.streaming,
+		});
 		setPrompt("");
 		setPendingImages([]);
 
 		try {
-			const response = await protocolClient.prompt(message, images);
+			const response = await protocolClient.prompt(message, {
+				images,
+				streamingBehavior: appState.streaming ? "steer" : undefined,
+			});
 			if (!response.success) {
 				storeRef.current.addErrorMessage(`Command error (${response.command}): ${response.error || "unknown error"}`);
 			}
@@ -240,6 +254,28 @@ export function App() {
 			storeRef.current.addErrorMessage(`Failed to send prompt: ${messageText}`);
 		}
 	}, [appState.connected, appState.streaming, pendingImages, prompt]);
+
+	const dequeueScheduledMessages = useCallback(async () => {
+		const protocolClient = protocolRef.current;
+		if (!protocolClient) return;
+
+		const cleared = storeRef.current.clearScheduledMessages();
+		if (cleared.length === 0) return;
+
+		// Restore text into the prompt input
+		const restoredText = cleared.map((m) => m.text).join("\n\n");
+		setPrompt((current) => {
+			const combined = [restoredText, current].filter((t) => t.trim()).join("\n\n");
+			return combined;
+		});
+
+		try {
+			await protocolClient.clearQueue();
+		} catch (dequeueError) {
+			const messageText = dequeueError instanceof Error ? dequeueError.message : String(dequeueError);
+			storeRef.current.addErrorMessage(`Failed to dequeue messages: ${messageText}`);
+		}
+	}, []);
 
 	const abortPrompt = useCallback(async () => {
 		const protocolClient = protocolRef.current;
@@ -350,6 +386,11 @@ export function App() {
 					<ChangesPanel />
 				)}
 			</div>
+
+			<ScheduledMessages
+				messages={appState.scheduledMessages}
+				onDequeue={() => void dequeueScheduledMessages()}
+			/>
 
 			{/* Footer: prompt input + toolbar */}
 			<footer className={footerStyle}>

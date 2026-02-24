@@ -74,6 +74,11 @@ export class MockTransport implements Transport {
 
 		switch (command.type) {
 			case "prompt": {
+				if (this.replayActive && command.streamingBehavior === "steer") {
+					this.log("[mock] received steering message:", command.message);
+					this.queueSteeringInterweave(command.message);
+					return { type: "response", id, command: "prompt", success: true };
+				}
 				this.log("[mock] received prompt:", command.message);
 				this.startReplay();
 				return { type: "response", id, command: "prompt", success: true };
@@ -87,6 +92,17 @@ export class MockTransport implements Transport {
 					this.emitEvent({ type: "agent_end" });
 				}
 				return { type: "response", id, command: "abort", success: true };
+			}
+
+			case "clear_queue": {
+				this.log("[mock] clear_queue");
+				return {
+					type: "response",
+					id,
+					command: "clear_queue",
+					success: true,
+					data: { steering: [], followUp: [] },
+				};
 			}
 
 			case "list_sessions": {
@@ -268,6 +284,13 @@ export class MockTransport implements Transport {
 			clearTimeout(timer);
 		}
 		this.replayTimers = [];
+	}
+
+	/** Simulate the server interweaving a steering message after a short delay. */
+	private queueSteeringInterweave(_message: string): void {
+		// Intentionally does NOT emit message_start so the message stays in
+		// "scheduled" state indefinitely. Useful for iterating on the scheduled UI.
+		this.log("[mock] steering message queued (will stay scheduled for UI testing)");
 	}
 
 	private emitEvent(event: ServerEvent): void {

@@ -260,6 +260,11 @@ async function handleCommand(
 				return successResponse(id, "abort");
 			}
 
+			case "clear_queue": {
+				const cleared = session.clearQueue();
+				return successResponse(id, "clear_queue", cleared);
+			}
+
 			case "new_session": {
 				const opts = command.parentSession ? { parentSession: command.parentSession as string } : undefined;
 				const cancelled = !(await session.newSession(opts));

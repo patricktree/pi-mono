@@ -103,6 +103,11 @@ export interface AgentEndEvent {
 	type: "agent_end";
 }
 
+export interface MessageStartEvent {
+	type: "message_start";
+	message: UserMessage | AssistantMessage | ToolResultMessage;
+}
+
 export interface MessageUpdateEvent {
 	type: "message_update";
 	message: AssistantMessage;
@@ -186,6 +191,7 @@ export type ServerEvent =
 	| RpcResponse
 	| AgentStartEvent
 	| AgentEndEvent
+	| MessageStartEvent
 	| MessageUpdateEvent
 	| MessageEndEvent
 	| ToolExecutionStartEvent
@@ -199,11 +205,17 @@ export interface PromptCommand {
 	type: "prompt";
 	message: string;
 	images?: ImageContent[];
+	streamingBehavior?: "steer" | "followUp";
 }
 
 export interface AbortCommand {
 	id?: string;
 	type: "abort";
+}
+
+export interface ClearQueueCommand {
+	id?: string;
+	type: "clear_queue";
 }
 
 export interface ListSessionsCommand {
@@ -241,6 +253,7 @@ export interface GetContextUsageCommand {
 export type ClientCommand =
 	| PromptCommand
 	| AbortCommand
+	| ClearQueueCommand
 	| ListSessionsCommand
 	| SwitchSessionCommand
 	| NewSessionCommand

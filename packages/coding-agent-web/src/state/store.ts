@@ -5,6 +5,7 @@ import type {
 	ExtensionUiRequestEvent,
 	HistoryMessage,
 	ImageContent,
+	MessageStartEvent,
 	MessageUpdateEvent,
 	RpcResponse,
 	ServerEvent,
@@ -39,6 +40,8 @@ export interface AppState {
 	connected: boolean;
 	streaming: boolean;
 	messages: UiMessage[];
+	/** Steering messages queued but not yet interweaved into the conversation. */
+	scheduledMessages: UiMessage[];
 	/** Available sessions, sorted by modified date (newest first). */
 	sessions: SessionSummary[];
 	/** Current session ID. */
@@ -79,6 +82,7 @@ export class AppStore {
 		connected: false,
 		streaming: false,
 		messages: [],
+		scheduledMessages: [],
 		sessions: [],
 		currentSessionId: null,
 		sidebarOpen: false,
@@ -111,16 +115,34 @@ export class AppStore {
 		this.emit();
 	}
 
-	addUserMessage(text: string, images?: ImageContent[]): void {
+	addUserMessage(text: string, options?: { images?: ImageContent[]; scheduled?: boolean }): void {
 		const msg = createMessage("user", text);
-		if (images && images.length > 0) {
-			msg.images = images;
+		if (options?.images && options.images.length > 0) {
+			msg.images = options.images;
 		}
+		if (options?.scheduled) {
+			this.state = {
+				...this.state,
+				scheduledMessages: [...this.state.scheduledMessages, msg],
+			};
+		} else {
+			this.state = {
+				...this.state,
+				messages: [...this.state.messages, msg],
+			};
+		}
+		this.emit();
+	}
+
+	/** Clear all scheduled messages and return them. */
+	clearScheduledMessages(): UiMessage[] {
+		const cleared = this.state.scheduledMessages;
 		this.state = {
 			...this.state,
-			messages: [...this.state.messages, msg],
+			scheduledMessages: [],
 		};
 		this.emit();
+		return cleared;
 	}
 
 	addErrorMessage(text: string): void {
@@ -162,7 +184,7 @@ export class AppStore {
 
 	/** Clear messages (e.g. when switching sessions). */
 	clearMessages(): void {
-		this.state = { ...this.state, messages: [] };
+		this.state = { ...this.state, messages: [], scheduledMessages: [] };
 		this.activeTextMessageId = null;
 		this.activeThinkingMessageId = null;
 		this.activeToolStepId = null;
@@ -241,6 +263,11 @@ export class AppStore {
 				return;
 			}
 
+			case "message_start": {
+				this.applyMessageStart(event);
+				return;
+			}
+
 			case "message_update": {
 				this.applyMessageUpdate(event);
 				return;
@@ -284,6 +311,26 @@ export class AppStore {
 
 			default:
 				return;
+		}
+	}
+
+	private applyMessageStart(event: MessageStartEvent): void {
+		// When a user message is interweaved (steering), find the first scheduled
+		// message with matching text, move it from scheduledMessages into messages.
+		if (event.message.role === "user") {
+			const content = event.message.content;
+			const text = typeof content === "string" ? content : content.map((c) => ("text" in c ? c.text : "")).join("");
+
+			const scheduledIndex = this.state.scheduledMessages.findIndex((m) => m.kind === "user" && m.text === text);
+			if (scheduledIndex !== -1) {
+				const scheduled = this.state.scheduledMessages[scheduledIndex];
+				this.state = {
+					...this.state,
+					messages: [...this.state.messages, scheduled],
+					scheduledMessages: this.state.scheduledMessages.filter((_, i) => i !== scheduledIndex),
+				};
+				this.emit();
+			}
 		}
 	}
 

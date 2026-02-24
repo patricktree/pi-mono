@@ -9,6 +9,8 @@ export interface ScenarioStep {
 export interface Scenario {
 	/** If set, the scenario auto-plays on connect with this as the user message. */
 	autoPrompt?: string;
+	/** If set, a scheduled steering message is added after a short delay while the agent is running. */
+	autoSteeringPrompt?: string;
 	/** Events replayed automatically on page load (pre-populated history). */
 	preload: ServerEvent[];
 	/** Events replayed with timing when the user sends a prompt. */
@@ -919,6 +921,294 @@ const thinkingScenario: Scenario = {
 };
 
 // ---------------------------------------------------------------------------
+// Steering scenario: long-running agent to test steering messages
+// ---------------------------------------------------------------------------
+
+const STEERING_THINKING =
+	"The user wants me to analyze the codebase. Let me read several files to understand the structure.";
+
+const STEERING_TEXT_1 = "Let me start by reading the project configuration files.";
+
+const STEERING_ANSWER = `Here's a summary of the codebase structure:
+
+- **package.json** — ESM monorepo, pnpm workspaces
+- **tsconfig.json** — Strict TypeScript, ES2022 target
+- **src/index.ts** — Main entry point, exports public API
+- **src/utils.ts** — Shared utility functions
+- **src/auth.ts** — Authentication module (JWT-based)
+
+The project follows standard TypeScript conventions.`;
+
+const steeringScenario: Scenario = {
+	autoPrompt: "Analyze the full codebase for me",
+	autoSteeringPrompt: "Focus on the authentication module only",
+	preload: [],
+	steps: [
+		{ delay: 100, event: { type: "agent_start" } },
+		// Thinking
+		{
+			delay: 50,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: { type: "thinking_start" },
+			},
+		},
+		...thinkingDeltas(STEERING_THINKING, 10, 30),
+		{
+			delay: 20,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: { type: "thinking_end", content: STEERING_THINKING },
+			},
+		},
+		// Text before tools
+		{
+			delay: 50,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: { type: "text_start" },
+			},
+		},
+		...textDeltas(STEERING_TEXT_1, 8, 25),
+		{
+			delay: 20,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: { type: "text_end", content: STEERING_TEXT_1 },
+			},
+		},
+		// Tool 1: read package.json
+		{
+			delay: 50,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: { type: "toolcall_start" },
+			},
+		},
+		{
+			delay: 80,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: {
+					type: "toolcall_end",
+					toolCall: { type: "toolCall", id: "tc_s1", name: "read", arguments: { path: "package.json" } },
+				},
+			},
+		},
+		{
+			delay: 50,
+			event: {
+				type: "message_end",
+				message: {
+					role: "assistant",
+					content: [
+						{ type: "text", text: STEERING_TEXT_1 },
+						{ type: "toolCall", id: "tc_s1", name: "read", arguments: { path: "package.json" } },
+					],
+					timestamp: Date.now(),
+				},
+			},
+		},
+		{ delay: 50, event: { type: "tool_execution_start", toolName: "read" } },
+		{
+			delay: 1500,
+			event: {
+				type: "tool_execution_end",
+				toolName: "read",
+				result: { content: [{ type: "text", text: '{"name":"my-project","version":"2.0.0","type":"module"}' }] },
+				isError: false,
+			},
+		},
+		// Tool 2: read tsconfig.json (slow)
+		{
+			delay: 100,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: { type: "toolcall_start" },
+			},
+		},
+		{
+			delay: 80,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: {
+					type: "toolcall_end",
+					toolCall: { type: "toolCall", id: "tc_s2", name: "read", arguments: { path: "tsconfig.json" } },
+				},
+			},
+		},
+		{
+			delay: 50,
+			event: {
+				type: "message_end",
+				message: {
+					role: "assistant",
+					content: [{ type: "toolCall", id: "tc_s2", name: "read", arguments: { path: "tsconfig.json" } }],
+					timestamp: Date.now(),
+				},
+			},
+		},
+		{ delay: 50, event: { type: "tool_execution_start", toolName: "read" } },
+		{
+			delay: 2000,
+			event: {
+				type: "tool_execution_end",
+				toolName: "read",
+				result: {
+					content: [
+						{ type: "text", text: '{"compilerOptions":{"strict":true,"target":"ES2022","module":"NodeNext"}}' },
+					],
+				},
+				isError: false,
+			},
+		},
+		// Tool 3: list source files (slow)
+		{
+			delay: 100,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: { type: "toolcall_start" },
+			},
+		},
+		{
+			delay: 80,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: {
+					type: "toolcall_end",
+					toolCall: {
+						type: "toolCall",
+						id: "tc_s3",
+						name: "bash",
+						arguments: { command: "find src -name '*.ts' | head -20" },
+					},
+				},
+			},
+		},
+		{
+			delay: 50,
+			event: {
+				type: "message_end",
+				message: {
+					role: "assistant",
+					content: [
+						{
+							type: "toolCall",
+							id: "tc_s3",
+							name: "bash",
+							arguments: { command: "find src -name '*.ts' | head -20" },
+						},
+					],
+					timestamp: Date.now(),
+				},
+			},
+		},
+		{ delay: 50, event: { type: "tool_execution_start", toolName: "bash" } },
+		{
+			delay: 2000,
+			event: {
+				type: "tool_execution_end",
+				toolName: "bash",
+				result: {
+					content: [
+						{ type: "text", text: "src/index.ts\nsrc/utils.ts\nsrc/auth.ts\nsrc/handler.ts\nsrc/types.ts" },
+					],
+				},
+				isError: false,
+			},
+		},
+		// Tool 4: read main source (slow)
+		{
+			delay: 100,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: { type: "toolcall_start" },
+			},
+		},
+		{
+			delay: 80,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: {
+					type: "toolcall_end",
+					toolCall: { type: "toolCall", id: "tc_s4", name: "read", arguments: { path: "src/index.ts" } },
+				},
+			},
+		},
+		{
+			delay: 50,
+			event: {
+				type: "message_end",
+				message: {
+					role: "assistant",
+					content: [{ type: "toolCall", id: "tc_s4", name: "read", arguments: { path: "src/index.ts" } }],
+					timestamp: Date.now(),
+				},
+			},
+		},
+		{ delay: 50, event: { type: "tool_execution_start", toolName: "read" } },
+		{
+			delay: 2000,
+			event: {
+				type: "tool_execution_end",
+				toolName: "read",
+				result: {
+					content: [
+						{
+							type: "text",
+							text: 'export { createAgent } from "./agent.js";\nexport { createSession } from "./session.js";',
+						},
+					],
+				},
+				isError: false,
+			},
+		},
+		// Final answer
+		{
+			delay: 100,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: { type: "text_start" },
+			},
+		},
+		...textDeltas(STEERING_ANSWER, 6, 25),
+		{
+			delay: 20,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: { type: "text_end", content: STEERING_ANSWER },
+			},
+		},
+		{
+			delay: 50,
+			event: {
+				type: "message_end",
+				message: {
+					role: "assistant",
+					content: [{ type: "text", text: STEERING_ANSWER }],
+					timestamp: Date.now(),
+				},
+			},
+		},
+		{ delay: 50, event: { type: "agent_end" } },
+	],
+};
+
+// ---------------------------------------------------------------------------
 // Registry
 // ---------------------------------------------------------------------------
 
@@ -931,4 +1221,5 @@ export const SCENARIOS: Record<string, Scenario> = {
 	interleaved: interleavedScenario,
 	"in-progress": inProgressScenario,
 	thinking: thinkingScenario,
+	steering: steeringScenario,
 };

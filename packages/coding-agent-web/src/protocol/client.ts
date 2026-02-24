@@ -15,17 +15,27 @@ export class ProtocolClient {
 		this.transport = transport;
 	}
 
-	async prompt(message: string, images?: ImageContent[]): Promise<RpcResponse> {
+	async prompt(
+		message: string,
+		options?: { images?: ImageContent[]; streamingBehavior?: "steer" | "followUp" },
+	): Promise<RpcResponse> {
 		return this.transport.request({
 			type: "prompt",
 			message,
-			...(images && images.length > 0 ? { images } : {}),
+			...(options?.images && options.images.length > 0 ? { images: options.images } : {}),
+			...(options?.streamingBehavior ? { streamingBehavior: options.streamingBehavior } : {}),
 		});
 	}
 
 	async abort(): Promise<RpcResponse> {
 		return this.transport.request({
 			type: "abort",
+		});
+	}
+
+	async clearQueue(): Promise<RpcResponse> {
+		return this.transport.request({
+			type: "clear_queue",
 		});
 	}
 
