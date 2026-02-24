@@ -1,8 +1,21 @@
 # @mariozechner/pi-coding-agent-web
 
-Web frontend for `@mariozechner/pi-coding-agent --mode web`.
+Web frontend for Pi coding agent.
+
+<p align="center">
+  <img src="docs/screenshot-mobile.png" alt="Mobile screenshot" width="300" />
+</p>
 
 This package is a React + Vite app styled with [Linaria](https://github.com/callstack/linaria) (zero-runtime CSS-in-JS). It is a dedicated browser client for the coding-agent protocol server (WebSocket + RPC messages).
+
+## Features
+
+- Turn-grouped chat with streaming indicators, markdown rendering, and image attachments
+- Tool call visualization with phase status (calling → running → done/error) and expandable result previews
+- Prompt and shell (`!`) input modes with send/stop controls and mid-stream steering
+- Thinking level selector
+- Session management sidebar with create/switch and URL-synced reload persistence
+- WebSocket connection with status indicator, token auth, and context usage tracking
 
 ## Quick start
 
@@ -10,6 +23,17 @@ This package is a React + Vite app styled with [Linaria](https://github.com/call
 npm ci
 npm run build
 node packages/coding-agent/dist/cli.js --mode web --port 4781 --host 127.0.0.1
+# Pi Web UI available on http://127.0.0.1:4781/
+```
+
+To expose it on a device in your [Tailnet](https://tailscale.com/docs/concepts/tailnet):
+
+```bash
+npm ci
+npm run build
+node packages/coding-agent/dist/cli.js --mode web --port 4781 --host 127.0.0.1 --web-allowed-origin https://<device-dns-name>.<tailnet-name>.ts.net:4781
+tailscale serve --https 4781 http://localhost:4781
+# Pi Web UI available on https://<device-dns-name>.<tailnet-name>.ts.net:4781/
 ```
 
 ## Development
@@ -79,9 +103,9 @@ pi --mode web --serve-ui packages/coding-agent-web/dist
 
 ### URL parameters
 
-| Parameter | Purpose |
-| --- | --- |
-| `token` | Auth token (required if backend was started with `--web-token`) |
+| Parameter | Purpose                                                                        |
+| --------- | ------------------------------------------------------------------------------ |
+| `token`   | Auth token (required if backend was started with `--web-token`)                |
 | `session` | Session ID to restore on page load (set automatically when switching sessions) |
 
 Example:
