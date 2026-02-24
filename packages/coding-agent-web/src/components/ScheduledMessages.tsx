@@ -48,7 +48,6 @@ const messageRow = css`
 `;
 
 const bubble = css`
-	max-width: 85%;
 	padding: 8px 14px;
 	background-color: var(--color-oc-user-bg);
 	border: 1px solid var(--color-oc-user-border);
