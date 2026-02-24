@@ -1,3 +1,5 @@
+export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
+
 export interface ImageContent {
 	type: "image";
 	data: string; // base64 encoded image data
@@ -256,6 +258,12 @@ export interface BashCommand {
 	command: string;
 }
 
+export interface SetThinkingLevelCommand {
+	id?: string;
+	type: "set_thinking_level";
+	level: ThinkingLevel;
+}
+
 export interface AbortBashCommand {
 	id?: string;
 	type: "abort_bash";
@@ -279,6 +287,7 @@ export type ClientCommand =
 	| GetStateCommand
 	| GetMessagesCommand
 	| GetContextUsageCommand
+	| SetThinkingLevelCommand
 	| BashCommand
 	| AbortBashCommand;
 

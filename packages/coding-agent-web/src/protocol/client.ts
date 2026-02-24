@@ -7,6 +7,7 @@ import type {
 	ImageContent,
 	RpcResponse,
 	SessionSummary,
+	ThinkingLevel,
 } from "./types.js";
 
 export class ProtocolClient {
@@ -82,15 +83,25 @@ export class ProtocolClient {
 		return data.messages;
 	}
 
-	async getState(): Promise<{ sessionId: string; sessionName?: string }> {
+	async getState(): Promise<{ sessionId: string; sessionName?: string; thinkingLevel?: ThinkingLevel }> {
 		const response = await this.transport.request({
 			type: "get_state",
 		});
 		if (!response.success) {
 			throw new Error(response.error ?? "get_state failed");
 		}
-		const data = response.data as { sessionId: string; sessionName?: string };
+		const data = response.data as { sessionId: string; sessionName?: string; thinkingLevel?: ThinkingLevel };
 		return data;
+	}
+
+	async setThinkingLevel(level: ThinkingLevel): Promise<void> {
+		const response = await this.transport.request({
+			type: "set_thinking_level",
+			level,
+		});
+		if (!response.success) {
+			throw new Error(response.error ?? "set_thinking_level failed");
+		}
 	}
 
 	async getContextUsage(): Promise<ContextUsage | undefined> {

@@ -10,7 +10,7 @@ import { Sidebar } from "./components/Sidebar.js";
 import { createScenarioTransport } from "./mock/create-scenario-transport.js";
 import { SCENARIOS } from "./mock/scenarios.js";
 import { ProtocolClient } from "./protocol/client.js";
-import type { ExtensionUiRequestEvent, ImageContent, ServerEvent, SessionSummary } from "./protocol/types.js";
+import type { ExtensionUiRequestEvent, ImageContent, ServerEvent, SessionSummary, ThinkingLevel } from "./protocol/types.js";
 import { AppStore, type AppState } from "./state/store.js";
 import type { Transport } from "./transport/transport.js";
 import { WsClient } from "./transport/ws-client.js";
@@ -25,6 +25,7 @@ const INITIAL_STATE: AppState = {
 	currentSessionId: null,
 	sidebarOpen: false,
 	contextUsage: undefined,
+	thinkingLevel: undefined,
 };
 
 const appRoot = css`
@@ -128,6 +129,9 @@ export function App() {
 			try {
 				const [sessionState, sessions] = await Promise.all([protocolClient.getState(), protocolClient.listSessions()]);
 				storeRef.current.setSessions(sessions);
+				if (sessionState.thinkingLevel) {
+					storeRef.current.setThinkingLevel(sessionState.thinkingLevel);
+				}
 
 				const lastSession = sessions.length > 0 ? sessions[0] : undefined;
 				const needsSwitch = lastSession && lastSession.id !== sessionState.sessionId;
@@ -373,6 +377,24 @@ export function App() {
 		[appState.currentSessionId, refreshSessionState],
 	);
 
+	const onThinkingLevelChange = useCallback(
+		async (level: ThinkingLevel) => {
+			const protocolClient = protocolRef.current;
+			if (!protocolClient) return;
+
+			// Optimistically update the UI
+			storeRef.current.setThinkingLevel(level);
+
+			try {
+				await protocolClient.setThinkingLevel(level);
+			} catch (err) {
+				const messageText = err instanceof Error ? err.message : String(err);
+				storeRef.current.addErrorMessage(`Failed to set thinking level: ${messageText}`);
+			}
+		},
+		[],
+	);
+
 	const { orphans, turns } = useMemo(() => groupTurns(appState.messages), [appState.messages]);
 	const hasContent = orphans.length > 0 || turns.length > 0;
 	const latestUserId = useMemo(() => lastUserMessage(appState.messages)?.id, [appState.messages]);
@@ -439,7 +461,12 @@ export function App() {
 					onRemoveImage={(index) => setPendingImages((current) => current.filter((_, i) => i !== index))}
 					onError={(message) => storeRef.current.addErrorMessage(message)}
 				/>
-				<BottomToolbar mode={inputMode} onModeChange={setInputMode} />
+				<BottomToolbar
+					mode={inputMode}
+					onModeChange={setInputMode}
+					thinkingLevel={appState.thinkingLevel}
+					onThinkingLevelChange={(level) => void onThinkingLevelChange(level)}
+				/>
 			</footer>
 		</div>
 	);

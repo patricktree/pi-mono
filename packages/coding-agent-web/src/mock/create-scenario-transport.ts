@@ -1,4 +1,4 @@
-import type { SwitchSessionCommand } from "../protocol/types.js";
+import type { SetThinkingLevelCommand, SwitchSessionCommand } from "../protocol/types.js";
 import { TestTransport } from "../transport/test-transport.js";
 import type { Scenario } from "./scenarios.js";
 
@@ -23,6 +23,7 @@ export function createScenarioTransport(
 ): { transport: TestTransport; autoPrompt: string | undefined; autoSteeringPrompt: string | undefined } {
 	const transport = new TestTransport();
 	let activeSessionId = "session_new";
+	let mockThinkingLevel = "medium";
 
 	// -- get_state ------------------------------------------------------------
 
@@ -37,6 +38,7 @@ export function createScenarioTransport(
 				sessionId: activeSessionId,
 				sessionName: SESSION_NAMES[activeSessionId],
 				isStreaming: false,
+				thinkingLevel: mockThinkingLevel,
 			},
 		};
 	});
@@ -66,6 +68,20 @@ export function createScenarioTransport(
 			data: {
 				usage: { tokens: 42_000, contextWindow: 200_000, percent: 21 },
 			},
+		};
+	});
+
+	// -- set_thinking_level ---------------------------------------------------
+
+	transport.handleRequest("set_thinking_level", (cmd) => {
+		const level = (cmd as SetThinkingLevelCommand).level;
+		logger.log("[mock] set_thinking_level:", level);
+		mockThinkingLevel = level;
+		return {
+			type: "response",
+			id: cmd.id,
+			command: "set_thinking_level",
+			success: true,
 		};
 	});
 

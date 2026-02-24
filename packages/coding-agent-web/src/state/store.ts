@@ -10,6 +10,7 @@ import type {
 	RpcResponse,
 	ServerEvent,
 	SessionSummary,
+	ThinkingLevel,
 	ToolExecutionEndEvent,
 	ToolExecutionStartEvent,
 } from "../protocol/types.js";
@@ -58,6 +59,8 @@ export interface AppState {
 	sidebarOpen: boolean;
 	/** Context window usage, undefined until first fetch. */
 	contextUsage: ContextUsage | undefined;
+	/** Current thinking level, undefined until first state fetch. */
+	thinkingLevel: ThinkingLevel | undefined;
 }
 
 let nextMessageId = 0;
@@ -95,6 +98,7 @@ export class AppStore {
 		currentSessionId: null,
 		sidebarOpen: false,
 		contextUsage: undefined,
+		thinkingLevel: undefined,
 	};
 
 	private listeners = new Set<(state: AppState) => void>();
@@ -206,6 +210,11 @@ export class AppStore {
 
 	setContextUsage(usage: ContextUsage | undefined): void {
 		this.state = { ...this.state, contextUsage: usage };
+		this.emit();
+	}
+
+	setThinkingLevel(level: ThinkingLevel | undefined): void {
+		this.state = { ...this.state, thinkingLevel: level };
 		this.emit();
 	}
 
