@@ -130,7 +130,6 @@ export function App() {
 	const sessionStateQuery = useQuery({
 		queryKey: SESSION_STATE_QUERY_KEY,
 		enabled: connected,
-		refetchOnWindowFocus: false,
 		queryFn: async () => {
 			const protocolClient = protocolRef.current;
 			if (!protocolClient) {
@@ -143,7 +142,6 @@ export function App() {
 	const sessionsQuery = useQuery({
 		queryKey: SESSIONS_QUERY_KEY,
 		enabled: connected,
-		refetchOnWindowFocus: false,
 		queryFn: async () => {
 			const protocolClient = protocolRef.current;
 			if (!protocolClient) {
@@ -160,7 +158,6 @@ export function App() {
 	const messagesQuery = useQuery<UiMessage[]>({
 		queryKey: messagesQueryKey,
 		enabled: connected && currentSessionId !== null,
-		refetchOnWindowFocus: false,
 		queryFn: async () => {
 			const protocolClient = protocolRef.current;
 			if (!protocolClient) {
@@ -174,7 +171,6 @@ export function App() {
 	useQuery({
 		queryKey: contextQueryKey,
 		enabled: connected && currentSessionId !== null,
-		refetchOnWindowFocus: false,
 		queryFn: async () => {
 			const protocolClient = protocolRef.current;
 			if (!protocolClient) {
@@ -424,15 +420,18 @@ export function App() {
 			}
 			if (event.type === "session_changed") {
 				messageControllerRef.current.resetActiveMessageIds();
-				void (async () => {
-					const refreshed = await refreshSessionState();
-					const refreshedSessionId = refreshed?.sessionState.sessionId ?? null;
-					await refreshMessages(refreshedSessionId);
-					void refreshContextUsage(refreshedSessionId);
-				})();
+				// Invalidate session state and sessions list; when the session
+				// state refetches, currentSessionId changes which updates the
+				// messages and context-usage query keys, triggering fresh fetches
+				// for the new session. Broad prefix invalidation ensures cached
+				// data from previously-visited sessions is also marked stale.
+				void queryClient.invalidateQueries({ queryKey: SESSION_STATE_QUERY_KEY });
+				void queryClient.invalidateQueries({ queryKey: SESSIONS_QUERY_KEY });
+				void queryClient.invalidateQueries({ queryKey: ["ui-messages"] });
+				void queryClient.invalidateQueries({ queryKey: ["context-usage"] });
 			}
 			if (event.type === "agent_end") {
-				void refreshContextUsage(sessionId);
+				void queryClient.invalidateQueries({ queryKey: ["context-usage"] });
 			}
 		});
 
@@ -463,9 +462,6 @@ export function App() {
 		handleExtensionUiRequest,
 		onConnected,
 		queryClient,
-		refreshContextUsage,
-		refreshMessages,
-		refreshSessionState,
 		setConnected,
 		setStreaming,
 	]);

@@ -7,7 +7,20 @@ if (!app) {
 	throw new Error("Could not find #app root element");
 }
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+	defaultOptions: {
+		queries: {
+			/**
+			 * All live data arrives through the WebSocket (via setQueryData or
+			 * invalidation), so queries never need to auto-refetch based on
+			 * staleness. Refetches only happen through explicit invalidation.
+			 *
+			 * @see {@link https://tkdodo.eu/blog/using-web-sockets-with-react-query}
+			 */
+			staleTime: Infinity,
+		},
+	},
+});
 
 createRoot(app).render(
 	<QueryClientProvider client={queryClient}>
