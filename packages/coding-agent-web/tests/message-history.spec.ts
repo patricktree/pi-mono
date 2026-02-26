@@ -1,17 +1,17 @@
-import { expect, test } from "@playwright/test";
 import { setupApp } from "./helpers.js";
+import { expect, test } from "./test.js";
 
 test.describe("message history", () => {
-	test("displays pre-loaded user message as right-aligned bubble", async ({ page }) => {
-		await setupApp(page, {
+	test("displays pre-loaded user message as right-aligned bubble", async ({ server, page }) => {
+		await setupApp(server, page, {
 			messages: [{ role: "user", content: "Hello from history", timestamp: Date.now() }],
 		});
 		// Text appears in both SessionTitleBar and UserBubble
 		await expect(page.getByText("Hello from history").first()).toBeVisible();
 	});
 
-	test("displays pre-loaded assistant message with markdown", async ({ page }) => {
-		await setupApp(page, {
+	test("displays pre-loaded assistant message with markdown", async ({ server, page }) => {
+		await setupApp(server, page, {
 			messages: [
 				{ role: "user", content: "Explain something", timestamp: Date.now() - 2000 },
 				{
@@ -28,8 +28,8 @@ test.describe("message history", () => {
 		await expect(page).toHaveScreenshot("conversation-with-markdown.png");
 	});
 
-	test("displays pre-loaded tool call with done status and result", async ({ page }) => {
-		await setupApp(page, {
+	test("displays pre-loaded tool call with done status and result", async ({ server, page }) => {
+		await setupApp(server, page, {
 			messages: [
 				{ role: "user", content: "Read the file", timestamp: Date.now() - 3000 },
 				{
@@ -68,8 +68,8 @@ test.describe("message history", () => {
 		await expect(page).toHaveScreenshot("tool-call-expanded.png");
 	});
 
-	test("displays session title bar from first user message", async ({ page }) => {
-		await setupApp(page, {
+	test("displays session title bar from first user message", async ({ server, page }) => {
+		await setupApp(server, page, {
 			messages: [
 				{ role: "user", content: "Help me refactor auth", timestamp: Date.now() - 2000 },
 				{
@@ -84,8 +84,8 @@ test.describe("message history", () => {
 		await expect(page.getByText("Help me refactor auth")).toHaveCount(2);
 	});
 
-	test("displays tool call with error status", async ({ page }) => {
-		await setupApp(page, {
+	test("displays tool call with error status", async ({ server, page }) => {
+		await setupApp(server, page, {
 			messages: [
 				{ role: "user", content: "Read missing file", timestamp: Date.now() - 3000 },
 				{

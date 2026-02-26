@@ -1,9 +1,9 @@
-import { expect, test } from "@playwright/test";
-import { setupApp, successResponse } from "./helpers.js";
+import { bashResponse, setupApp, successResponse } from "./helpers.js";
+import { expect, test } from "./test.js";
 
 test.describe("input modes", () => {
-	test("sends prompt and shows user bubble", async ({ page }) => {
-		await setupApp(page, {
+	test("sends prompt and shows user bubble", async ({ server, page }) => {
+		await setupApp(server, page, {
 			handlers: {
 				prompt: successResponse("prompt"),
 			},
@@ -18,8 +18,8 @@ test.describe("input modes", () => {
 		await expect(page.getByPlaceholder(/Ask anything/)).toHaveValue("");
 	});
 
-	test("auto-switches to shell mode when typing ! prefix", async ({ page }) => {
-		await setupApp(page);
+	test("auto-switches to shell mode when typing ! prefix", async ({ server, page }) => {
+		await setupApp(server, page);
 
 		await page.locator("textarea").fill("!ls -la");
 
@@ -29,8 +29,8 @@ test.describe("input modes", () => {
 		await expect(page).toHaveScreenshot("shell-mode-active.png");
 	});
 
-	test("auto-switches back to prompt mode when removing ! prefix", async ({ page }) => {
-		await setupApp(page);
+	test("auto-switches back to prompt mode when removing ! prefix", async ({ server, page }) => {
+		await setupApp(server, page);
 
 		// Use the generic textarea locator since the placeholder changes between modes
 		const textarea = page.locator("textarea");
@@ -42,8 +42,8 @@ test.describe("input modes", () => {
 		await expect(page.getByPlaceholder(/Ask anything/)).toBeVisible();
 	});
 
-	test("toggles to shell mode via toolbar button", async ({ page }) => {
-		await setupApp(page);
+	test("toggles to shell mode via toolbar button", async ({ server, page }) => {
+		await setupApp(server, page);
 
 		await page.getByRole("button", { name: "Shell mode" }).click();
 		await expect(page.getByPlaceholder("Enter shell command...")).toBeVisible();
@@ -52,20 +52,15 @@ test.describe("input modes", () => {
 		await expect(page.getByPlaceholder(/Ask anything/)).toBeVisible();
 	});
 
-	test("executes bash command and shows result", async ({ page }) => {
-		await setupApp(page, {
+	test("executes bash command and shows result", async ({ server, page }) => {
+		await setupApp(server, page, {
 			handlers: {
-				bash: {
-					type: "response",
-					command: "bash",
-					success: true,
-					data: {
-						output: "total 42\ndrwxr-xr-x  5 user  staff  160 Jan  1 00:00 src",
-						exitCode: 0,
-						cancelled: false,
-						truncated: false,
-					},
-				},
+				bash: bashResponse({
+					output: "total 42\ndrwxr-xr-x  5 user  staff  160 Jan  1 00:00 src",
+					exitCode: 0,
+					cancelled: false,
+					truncated: false,
+				}),
 			},
 		});
 
@@ -80,20 +75,15 @@ test.describe("input modes", () => {
 		await expect(page).toHaveScreenshot("bash-result.png");
 	});
 
-	test("sends bash command with ! prefix in prompt mode", async ({ page }) => {
-		await setupApp(page, {
+	test("sends bash command with ! prefix in prompt mode", async ({ server, page }) => {
+		await setupApp(server, page, {
 			handlers: {
-				bash: {
-					type: "response",
-					command: "bash",
-					success: true,
-					data: {
-						output: "hello world",
-						exitCode: 0,
-						cancelled: false,
-						truncated: false,
-					},
-				},
+				bash: bashResponse({
+					output: "hello world",
+					exitCode: 0,
+					cancelled: false,
+					truncated: false,
+				}),
 			},
 		});
 
@@ -104,8 +94,8 @@ test.describe("input modes", () => {
 		await expect(page.getByText("hello world", { exact: true })).toBeVisible();
 	});
 
-	test("shows image attachment button in prompt mode only", async ({ page }) => {
-		await setupApp(page);
+	test("shows image attachment button in prompt mode only", async ({ server, page }) => {
+		await setupApp(server, page);
 
 		// In prompt mode, attach button should be visible
 		await expect(page.getByRole("button", { name: "Attach image" })).toBeVisible();

@@ -69,6 +69,13 @@ export function timeAgo(isoDate: string): string {
 
 export function getWebSocketUrl(): string {
 	const params = new URLSearchParams(window.location.search);
+
+	// Allow overriding the WebSocket URL via `?ws=` query param (used by E2E tests).
+	const wsOverride = params.get("ws");
+	if (wsOverride) {
+		return wsOverride;
+	}
+
 	const token = params.get("token");
 	const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
 	const tokenSuffix = token ? `?token=${encodeURIComponent(token)}` : "";

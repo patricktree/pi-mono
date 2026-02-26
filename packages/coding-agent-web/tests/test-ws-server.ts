@@ -1,0 +1,173 @@
+import { type WebSocket, WebSocketServer } from "ws";
+import type { ClientCommand, RpcResponse, ServerEvent } from "../src/protocol/types.js";
+
+/** RPC response body without `id` and `type` — the server injects those. */
+export type RpcResponseBody = Omit<RpcResponse, "id" | "type">;
+
+/**
+ * Response handler: receives the parsed client command and returns a response
+ * body. The server wraps it with `id` (from the command) and `type: "response"`.
+ */
+export type RequestHandler = (command: ClientCommand) => RpcResponseBody;
+
+/**
+ * A lightweight WebSocket server for E2E tests.
+ *
+ * - Listens on an OS-assigned port (port 0).
+ * - Accepts one client connection at a time.
+ * - Routes incoming RPC commands to registered handlers by `command.type`.
+ * - Exposes `emitEvent()` / `emitEvents()` to push server events to the client.
+ * - Worker-scoped: one server per Playwright worker, shared across tests.
+ */
+export class TestWsServer {
+	private wss: WebSocketServer;
+	private client: WebSocket | null = null;
+	private handlers = new Map<string, RequestHandler>();
+	private _port: number;
+
+	private constructor(wss: WebSocketServer, port: number) {
+		this.wss = wss;
+		this._port = port;
+
+		wss.on("connection", (ws) => {
+			this.client = ws;
+
+			ws.on("message", (data) => {
+				const raw = typeof data === "string" ? data : data.toString("utf-8");
+				let command: ClientCommand;
+				try {
+					command = JSON.parse(raw) as ClientCommand;
+				} catch {
+					return;
+				}
+
+				if (!command.type) {
+					return;
+				}
+
+				const handler = this.handlers.get(command.type);
+				if (!handler) {
+					const errorResponse: RpcResponse = {
+						type: "response",
+						id: command.id,
+						command: command.type,
+						success: false,
+						error: `TestWsServer: no handler for "${command.type}"`,
+					};
+					ws.send(JSON.stringify(errorResponse));
+					return;
+				}
+
+				const body = handler(command);
+				const response: RpcResponse = {
+					...body,
+					id: command.id,
+					type: "response",
+				};
+				ws.send(JSON.stringify(response));
+			});
+
+			ws.on("close", () => {
+				if (this.client === ws) {
+					this.client = null;
+				}
+			});
+		});
+	}
+
+	/** The port the server is listening on. */
+	get port(): number {
+		return this._port;
+	}
+
+	/** The `ws://` URL tests should pass to the app via `?ws=`. */
+	get url(): string {
+		return `ws://127.0.0.1:${this._port}`;
+	}
+
+	/**
+	 * Create and start a new server. Resolves once it's listening.
+	 */
+	static async create(): Promise<TestWsServer> {
+		return new Promise<TestWsServer>((resolve, reject) => {
+			const wss = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+			wss.on("listening", () => {
+				const addr = wss.address();
+				const port = addr !== null && typeof addr === "object" ? addr.port : 0;
+				resolve(new TestWsServer(wss, port));
+			});
+			wss.on("error", reject);
+		});
+	}
+
+	/**
+	 * Register a handler for a command type. The handler receives the full
+	 * parsed command and returns the response body (without `id` or `type`).
+	 */
+	setHandler(commandType: ClientCommand["type"], handler: RequestHandler): void {
+		this.handlers.set(commandType, handler);
+	}
+
+	/**
+	 * Convenience: register a handler that always returns a static response body.
+	 */
+	setStaticHandler(commandType: ClientCommand["type"], response: RpcResponseBody): void {
+		this.handlers.set(commandType, () => response);
+	}
+
+	/**
+	 * Remove the handler for a command type.
+	 */
+	removeHandler(commandType: ClientCommand["type"]): void {
+		this.handlers.delete(commandType);
+	}
+
+	/**
+	 * Remove all registered handlers. Called between tests when the server
+	 * is worker-scoped to prevent handler leakage.
+	 */
+	clearHandlers(): void {
+		this.handlers.clear();
+	}
+
+	/**
+	 * Send a server event to the connected client.
+	 */
+	emitEvent(event: ServerEvent): void {
+		if (!this.client || this.client.readyState !== this.client.OPEN) {
+			throw new Error("TestWsServer: no connected client");
+		}
+		this.client.send(JSON.stringify(event));
+	}
+
+	/**
+	 * Send multiple server events in order.
+	 */
+	emitEvents(events: ServerEvent[]): void {
+		for (const event of events) {
+			this.emitEvent(event);
+		}
+	}
+
+	/**
+	 * Close the server and all connections. Force-terminates any connected
+	 * clients first so `wss.close()` doesn't block waiting for graceful shutdown.
+	 */
+	async close(): Promise<void> {
+		// Terminate all connected clients immediately
+		for (const client of this.wss.clients) {
+			client.terminate();
+		}
+		this.client = null;
+
+		return new Promise<void>((resolve, reject) => {
+			this.wss.close((err) => {
+				if (err) {
+					reject(err);
+				} else {
+					resolve();
+				}
+			});
+		});
+	}
+}

@@ -1,14 +1,14 @@
-import { expect, test } from "@playwright/test";
 import { setupApp, successResponse } from "./helpers.js";
+import { expect, test } from "./test.js";
 
 test.describe("thinking level selector", () => {
-	test("shows current thinking level", async ({ page }) => {
-		await setupApp(page, { thinkingLevel: "high" });
+	test("shows current thinking level", async ({ server, page }) => {
+		await setupApp(server, page, { thinkingLevel: "high" });
 		await expect(page.getByRole("button", { name: "Select thinking level" })).toContainText("high");
 	});
 
-	test("opens dropdown with all levels on click", async ({ page }) => {
-		await setupApp(page);
+	test("opens dropdown with all levels on click", async ({ server, page }) => {
+		await setupApp(server, page);
 		await page.getByRole("button", { name: "Select thinking level" }).click();
 
 		await expect(page.getByRole("button", { name: /No reasoning/ })).toBeVisible();
@@ -21,8 +21,8 @@ test.describe("thinking level selector", () => {
 		await expect(page).toHaveScreenshot("thinking-level-dropdown.png");
 	});
 
-	test("selects a new thinking level and updates display", async ({ page }) => {
-		await setupApp(page, {
+	test("selects a new thinking level and updates display", async ({ server, page }) => {
+		await setupApp(server, page, {
 			thinkingLevel: "medium",
 			handlers: {
 				set_thinking_level: successResponse("set_thinking_level"),
@@ -40,8 +40,8 @@ test.describe("thinking level selector", () => {
 		await expect(page.getByRole("button", { name: "Select thinking level" })).toContainText("high");
 	});
 
-	test("closes dropdown when clicking outside", async ({ page }) => {
-		await setupApp(page);
+	test("closes dropdown when clicking outside", async ({ server, page }) => {
+		await setupApp(server, page);
 		await page.getByRole("button", { name: "Select thinking level" }).click();
 
 		// Dropdown is open

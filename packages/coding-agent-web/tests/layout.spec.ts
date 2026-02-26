@@ -1,26 +1,26 @@
-import { expect, test } from "@playwright/test";
 import { setupApp } from "./helpers.js";
+import { expect, test } from "./test.js";
 
 test.describe("layout and connection", () => {
-	test("shows header with connected status", async ({ page }) => {
-		await setupApp(page);
+	test("shows header with connected status", async ({ server, page }) => {
+		await setupApp(server, page);
 		await expect(page.getByText("Connected")).toBeVisible();
 	});
 
-	test("shows prompt input with placeholder", async ({ page }) => {
-		await setupApp(page);
+	test("shows prompt input with placeholder", async ({ server, page }) => {
+		await setupApp(server, page);
 		await expect(page.getByPlaceholder(/Ask anything/)).toBeVisible();
 	});
 
-	test("shows empty state heading for new session", async ({ page }) => {
-		await setupApp(page);
+	test("shows empty state heading for new session", async ({ server, page }) => {
+		await setupApp(server, page);
 		await expect(page.getByRole("heading", { name: "New session" })).toBeVisible();
 
 		await expect(page).toHaveScreenshot("empty-state.png");
 	});
 
-	test("shows cwd in empty state when session has cwd", async ({ page }) => {
-		await setupApp(page, {
+	test("shows cwd in empty state when session has cwd", async ({ server, page }) => {
+		await setupApp(server, page, {
 			sessionId: "s1",
 			sessions: [
 				{
@@ -39,13 +39,13 @@ test.describe("layout and connection", () => {
 		await expect(page).toHaveScreenshot("empty-state-with-cwd.png");
 	});
 
-	test("shows thinking-level selector in bottom toolbar", async ({ page }) => {
-		await setupApp(page);
+	test("shows thinking-level selector in bottom toolbar", async ({ server, page }) => {
+		await setupApp(server, page);
 		await expect(page.getByRole("button", { name: "Select thinking level" })).toBeVisible();
 	});
 
-	test("shows shell and prompt mode toggle buttons", async ({ page }) => {
-		await setupApp(page);
+	test("shows shell and prompt mode toggle buttons", async ({ server, page }) => {
+		await setupApp(server, page);
 		await expect(page.getByRole("button", { name: "Shell mode" })).toBeVisible();
 		await expect(page.getByRole("button", { name: "Prompt mode" })).toBeVisible();
 	});

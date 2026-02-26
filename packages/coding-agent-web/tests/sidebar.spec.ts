@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
-import { emitEvent, sessionChanged, setHandler, setupApp, successResponse } from "./helpers.js";
+import { sessionChanged, setupApp, successResponse } from "./helpers.js";
+import { expect, test } from "./test.js";
 
 const NOW = Date.now();
 
@@ -29,8 +29,8 @@ function mockSessions() {
 }
 
 test.describe("sidebar", () => {
-	test("opens sidebar and shows session list", async ({ page }) => {
-		await setupApp(page, {
+	test("opens sidebar and shows session list", async ({ server, page }) => {
+		await setupApp(server, page, {
 			sessionId: "s1",
 			sessions: mockSessions(),
 		});
@@ -42,8 +42,8 @@ test.describe("sidebar", () => {
 		await expect(page).toHaveScreenshot("sidebar-open.png");
 	});
 
-	test("closes sidebar when clicking overlay", async ({ page }) => {
-		await setupApp(page, {
+	test("closes sidebar when clicking overlay", async ({ server, page }) => {
+		await setupApp(server, page, {
 			sessionId: "s1",
 			sessions: mockSessions(),
 		});
@@ -59,8 +59,8 @@ test.describe("sidebar", () => {
 		await expect(page.getByText("Refactor auth")).not.toBeInViewport();
 	});
 
-	test("shows new session button in sidebar", async ({ page }) => {
-		await setupApp(page, {
+	test("shows new session button in sidebar", async ({ server, page }) => {
+		await setupApp(server, page, {
 			sessions: mockSessions(),
 		});
 
@@ -68,8 +68,8 @@ test.describe("sidebar", () => {
 		await expect(page.getByRole("button", { name: /New session/ })).toBeVisible();
 	});
 
-	test("creates new session on new-session click", async ({ page }) => {
-		await setupApp(page, {
+	test("creates new session on new-session click", async ({ server, page }) => {
+		await setupApp(server, page, {
 			sessionId: "s1",
 			sessions: mockSessions(),
 			messages: [{ role: "user", content: "Old message", timestamp: NOW }],
@@ -82,28 +82,27 @@ test.describe("sidebar", () => {
 		await expect(page.getByText("Old message").first()).toBeVisible();
 
 		// Update handlers to reflect the new session state
-		await setHandler(
-			page,
+		server.setStaticHandler(
 			"get_state",
 			successResponse("get_state", { sessionId: "s-new", thinkingLevel: "medium" }),
 		);
-		await setHandler(page, "get_messages", successResponse("get_messages", { messages: [] }));
-		await setHandler(page, "list_sessions", successResponse("list_sessions", { sessions: mockSessions() }));
+		server.setStaticHandler("get_messages", successResponse("get_messages", { messages: [] }));
+		server.setStaticHandler("list_sessions", successResponse("list_sessions", { sessions: mockSessions() }));
 
 		await page.getByRole("button", { name: "Open sidebar" }).click();
 		await page.getByRole("button", { name: /New session/ }).click();
 
 		// Emit session_changed to invalidate TanStack Query caches (staleTime: Infinity)
 		// — mirrors the real backend which broadcasts this event on session transitions
-		await emitEvent(page, sessionChanged("s-new", "new"));
+		server.emitEvent(sessionChanged("s-new", "new"));
 
 		// After new session, old message should be gone and empty state shown
 		await expect(page.getByText("Old message").first()).not.toBeVisible();
 		await expect(page.getByRole("heading", { name: "New session" })).toBeVisible();
 	});
 
-	test("switches session on session click", async ({ page }) => {
-		await setupApp(page, {
+	test("switches session on session click", async ({ server, page }) => {
+		await setupApp(server, page, {
 			sessionId: "s1",
 			sessions: mockSessions(),
 			messages: [{ role: "user", content: "Session 1 message", timestamp: NOW }],
@@ -115,9 +114,8 @@ test.describe("sidebar", () => {
 		await expect(page.getByText("Session 1 message").first()).toBeVisible();
 
 		// Update handlers to return session 2 data after switch
-		await setHandler(page, "get_state", successResponse("get_state", { sessionId: "s2", thinkingLevel: "medium" }));
-		await setHandler(
-			page,
+		server.setStaticHandler("get_state", successResponse("get_state", { sessionId: "s2", thinkingLevel: "medium" }));
+		server.setStaticHandler(
 			"get_messages",
 			successResponse("get_messages", {
 				messages: [{ role: "user", content: "Session 2 message", timestamp: NOW }],
@@ -129,7 +127,7 @@ test.describe("sidebar", () => {
 
 		// Emit session_changed to invalidate TanStack Query caches (staleTime: Infinity)
 		// — mirrors the real backend which broadcasts this event on session transitions
-		await emitEvent(page, sessionChanged("s2", "switch", "Fix CI pipeline"));
+		server.emitEvent(sessionChanged("s2", "switch", "Fix CI pipeline"));
 
 		// Session 2 content should now be visible
 		await expect(page.getByText("Session 2 message").first()).toBeVisible();

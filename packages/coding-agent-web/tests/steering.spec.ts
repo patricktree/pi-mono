@@ -1,9 +1,9 @@
-import { expect, test } from "@playwright/test";
-import { agentEnd, agentStart, emitEvent, setupApp, successResponse, textDelta, textEnd } from "./helpers.js";
+import { agentEnd, agentStart, messageStart, setupApp, successResponse, textDelta, textEnd } from "./helpers.js";
+import { expect, test } from "./test.js";
 
 test.describe("steering messages", () => {
-	test("queues steering message when sending during streaming", async ({ page }) => {
-		await setupApp(page, {
+	test("queues steering message when sending during streaming", async ({ server, page }) => {
+		await setupApp(server, page, {
 			handlers: {
 				prompt: successResponse("prompt"),
 			},
@@ -14,8 +14,8 @@ test.describe("steering messages", () => {
 		await page.getByRole("button", { name: "Send" }).click();
 
 		// Start streaming
-		await emitEvent(page, agentStart());
-		await emitEvent(page, textDelta("Working on it..."));
+		server.emitEvent(agentStart());
+		server.emitEvent(textDelta("Working on it..."));
 
 		// Send a steering message while streaming
 		await page.getByPlaceholder(/Send a steering message/).fill("Focus on auth only");
@@ -28,8 +28,8 @@ test.describe("steering messages", () => {
 		await expect(page).toHaveScreenshot("scheduled-steering-message.png");
 	});
 
-	test("restore-to-editor moves scheduled message text back to prompt", async ({ page }) => {
-		await setupApp(page, {
+	test("restore-to-editor moves scheduled message text back to prompt", async ({ server, page }) => {
+		await setupApp(server, page, {
 			handlers: {
 				prompt: successResponse("prompt"),
 				clear_queue: successResponse("clear_queue"),
@@ -39,8 +39,8 @@ test.describe("steering messages", () => {
 		// Send initial prompt and start streaming
 		await page.getByPlaceholder(/Ask anything/).fill("Do work");
 		await page.getByRole("button", { name: "Send" }).click();
-		await emitEvent(page, agentStart());
-		await emitEvent(page, textDelta("Processing..."));
+		server.emitEvent(agentStart());
+		server.emitEvent(textDelta("Processing..."));
 
 		// Send a steering message
 		await page.getByPlaceholder(/Send a steering message/).fill("Change direction");
@@ -55,8 +55,8 @@ test.describe("steering messages", () => {
 		await expect(page.getByPlaceholder(/Send a steering message/)).toHaveValue("Change direction");
 	});
 
-	test("scheduled message moves to timeline when server interweaves it", async ({ page }) => {
-		await setupApp(page, {
+	test("scheduled message moves to timeline when server interweaves it", async ({ server, page }) => {
+		await setupApp(server, page, {
 			handlers: {
 				prompt: successResponse("prompt"),
 			},
@@ -65,8 +65,8 @@ test.describe("steering messages", () => {
 		// Send initial prompt and start streaming
 		await page.getByPlaceholder(/Ask anything/).fill("Start");
 		await page.getByRole("button", { name: "Send" }).click();
-		await emitEvent(page, agentStart());
-		await emitEvent(page, textDelta("Working..."));
+		server.emitEvent(agentStart());
+		server.emitEvent(textDelta("Working..."));
 
 		// Send steering message
 		await page.getByPlaceholder(/Send a steering message/).fill("Redirect");
@@ -74,16 +74,13 @@ test.describe("steering messages", () => {
 		await expect(page.getByText("Scheduled")).toBeVisible();
 
 		// Server emits message_start for the user message — this interweaves it
-		await emitEvent(page, {
-			type: "message_start",
-			message: { role: "user", content: "Redirect", timestamp: Date.now() },
-		});
+		server.emitEvent(messageStart("Redirect"));
 
 		// The scheduled section should disappear (message consumed)
 		await expect(page.getByText("Scheduled")).not.toBeVisible();
 
 		// End the agent run
-		await emitEvent(page, textEnd("Working..."));
-		await emitEvent(page, agentEnd());
+		server.emitEvent(textEnd("Working..."));
+		server.emitEvent(agentEnd());
 	});
 });

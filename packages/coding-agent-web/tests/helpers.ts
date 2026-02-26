@@ -1,48 +1,36 @@
 import type { Page } from "@playwright/test";
-
-// ---------------------------------------------------------------------------
-// Window type augmentation for page.evaluate callbacks
-// Uses broad types since data is JSON-serialized across the Playwright bridge.
-// ---------------------------------------------------------------------------
-
-interface PiTestApi {
-	setHandler(commandType: string, response: Record<string, unknown>): void;
-	removeHandler(commandType: string): void;
-	emitEvent(event: Record<string, unknown>): void;
-	emitEvents(events: Record<string, unknown>[]): void;
-	connect(): void;
-	disconnect(): void;
-}
-
-declare global {
-	interface Window {
-		__piTestApi?: PiTestApi;
-	}
-}
+import type {
+	AgentEndEvent,
+	AgentStartEvent,
+	AssistantMessage,
+	BashResult,
+	ClientCommand,
+	ContextUsage,
+	ExtensionErrorEvent,
+	HistoryMessage,
+	MessageEndEvent,
+	MessageUpdateEvent,
+	ServerEvent,
+	SessionChangedEvent,
+	SessionSummary,
+	ToolCallContent,
+	ToolExecutionEndEvent,
+	ToolExecutionStartEvent,
+} from "../src/protocol/types.js";
+import type { RpcResponseBody, TestWsServer } from "./test-ws-server.js";
 
 // ---------------------------------------------------------------------------
 // Setup options
 // ---------------------------------------------------------------------------
 
-export interface MockSession {
-	path: string;
-	id: string;
-	cwd: string;
-	name?: string;
-	created: string;
-	modified: string;
-	messageCount: number;
-	firstMessage: string;
-}
-
 export interface SetupOptions {
 	sessionId?: string;
 	thinkingLevel?: string;
-	sessions?: MockSession[];
-	messages?: Record<string, unknown>[];
-	contextUsage?: { tokens: number; contextWindow: number; percent: number } | null;
-	/** Extra handlers to register. Values are full RPC response objects. */
-	handlers?: Record<string, Record<string, unknown>>;
+	sessions?: SessionSummary[];
+	messages?: HistoryMessage[];
+	contextUsage?: ContextUsage | null;
+	/** Extra handlers keyed by command type. Values are RPC response bodies. */
+	handlers?: Partial<Record<ClientCommand["type"], RpcResponseBody>>;
 }
 
 // ---------------------------------------------------------------------------
@@ -50,111 +38,73 @@ export interface SetupOptions {
 // ---------------------------------------------------------------------------
 
 /**
- * Navigate to `/?test`, configure the TestTransport with the given handlers,
- * and call `connect()`. After this resolves the app is connected with initial
- * data loaded.
+ * Configure the server with default handlers, navigate the page to the app
+ * with `?ws=` pointing at the server, and wait for "Connected".
  */
-export async function setupApp(page: Page, options: SetupOptions = {}): Promise<void> {
-	await page.goto("/?test");
-	await page.waitForFunction(() => window.__piTestApi !== undefined);
+export async function setupApp(server: TestWsServer, page: Page, options: SetupOptions = {}): Promise<void> {
+	// Clear any handlers left over from a previous test (server is worker-scoped)
+	server.clearHandlers();
 
-	await page.evaluate((opts) => {
-		const api = window.__piTestApi!;
-
-		api.setHandler("get_state", {
-			type: "response",
-			command: "get_state",
-			success: true,
-			data: {
-				sessionId: opts.sessionId ?? "test-session",
-				thinkingLevel: opts.thinkingLevel ?? "medium",
-			},
-		});
-
-		api.setHandler("list_sessions", {
-			type: "response",
-			command: "list_sessions",
-			success: true,
-			data: { sessions: opts.sessions ?? [] },
-		});
-
-		api.setHandler("get_messages", {
-			type: "response",
-			command: "get_messages",
-			success: true,
-			data: { messages: opts.messages ?? [] },
-		});
-
-		api.setHandler("get_context_usage", {
-			type: "response",
-			command: "get_context_usage",
-			success: true,
-			data: {
-				usage:
-					opts.contextUsage === null
-						? null
-						: (opts.contextUsage ?? { tokens: 1000, contextWindow: 200000, percent: 0.5 }),
-			},
-		});
-
-		if (opts.handlers) {
-			for (const [type, response] of Object.entries(opts.handlers)) {
-				api.setHandler(type, response);
-			}
-		}
-
-		api.connect();
-	}, options);
-
-	// Wait for the status listener to fire and React to render
-	await page.getByText("Connected").waitFor({ state: "visible" });
-}
-
-/**
- * Emit a single server event into the app's transport.
- */
-export async function emitEvent(page: Page, event: Record<string, unknown>): Promise<void> {
-	await page.evaluate((evt) => {
-		window.__piTestApi!.emitEvent(evt);
-	}, event);
-}
-
-/**
- * Emit multiple server events in order (synchronous, no delays).
- */
-export async function emitEvents(page: Page, events: Record<string, unknown>[]): Promise<void> {
-	await page.evaluate((evts) => {
-		window.__piTestApi!.emitEvents(evts);
-	}, events);
-}
-
-/**
- * Set (or replace) a handler for a command type at any point during the test.
- */
-export async function setHandler(page: Page, commandType: string, response: Record<string, unknown>): Promise<void> {
-	await page.evaluate(
-		({ type, resp }) => {
-			window.__piTestApi!.setHandler(type, resp);
+	// Default handlers for the four RPCs called during onConnected
+	server.setStaticHandler("get_state", {
+		command: "get_state",
+		success: true,
+		data: {
+			sessionId: options.sessionId ?? "test-session",
+			thinkingLevel: options.thinkingLevel ?? "medium",
 		},
-		{ type: commandType, resp: response },
-	);
+	});
+
+	server.setStaticHandler("list_sessions", {
+		command: "list_sessions",
+		success: true,
+		data: { sessions: options.sessions ?? [] },
+	});
+
+	server.setStaticHandler("get_messages", {
+		command: "get_messages",
+		success: true,
+		data: { messages: options.messages ?? [] },
+	});
+
+	server.setStaticHandler("get_context_usage", {
+		command: "get_context_usage",
+		success: true,
+		data: {
+			usage:
+				options.contextUsage === null
+					? null
+					: (options.contextUsage ?? { tokens: 1000, contextWindow: 200000, percent: 0.5 }),
+		},
+	});
+
+	if (options.handlers) {
+		for (const [type, response] of Object.entries(options.handlers)) {
+			server.setStaticHandler(type as ClientCommand["type"], response);
+		}
+	}
+
+	await page.goto(`/?ws=${encodeURIComponent(server.url)}`);
+
+	// Wait for the WebSocket to connect and React to render the connected state
+	await page.getByText("Connected").waitFor({ state: "visible" });
 }
 
 // ---------------------------------------------------------------------------
 // Event builder helpers (reduce boilerplate in tests)
 // ---------------------------------------------------------------------------
 
-const MSG_STUB = { role: "assistant", content: [], timestamp: 0 };
+const MSG_STUB: AssistantMessage = { role: "assistant", content: [], timestamp: 0 };
 
-export function agentStart(): Record<string, unknown> {
+export function agentStart(): AgentStartEvent {
 	return { type: "agent_start" };
 }
 
-export function agentEnd(): Record<string, unknown> {
+export function agentEnd(): AgentEndEvent {
 	return { type: "agent_end" };
 }
 
-export function textDelta(delta: string): Record<string, unknown> {
+export function textDelta(delta: string): MessageUpdateEvent {
 	return {
 		type: "message_update",
 		message: MSG_STUB,
@@ -162,7 +112,7 @@ export function textDelta(delta: string): Record<string, unknown> {
 	};
 }
 
-export function textEnd(content: string): Record<string, unknown> {
+export function textEnd(content: string): MessageUpdateEvent {
 	return {
 		type: "message_update",
 		message: MSG_STUB,
@@ -170,7 +120,7 @@ export function textEnd(content: string): Record<string, unknown> {
 	};
 }
 
-export function thinkingDelta(delta: string): Record<string, unknown> {
+export function thinkingDelta(delta: string): MessageUpdateEvent {
 	return {
 		type: "message_update",
 		message: MSG_STUB,
@@ -178,7 +128,7 @@ export function thinkingDelta(delta: string): Record<string, unknown> {
 	};
 }
 
-export function thinkingEnd(content: string): Record<string, unknown> {
+export function thinkingEnd(content: string): MessageUpdateEvent {
 	return {
 		type: "message_update",
 		message: MSG_STUB,
@@ -186,22 +136,20 @@ export function thinkingEnd(content: string): Record<string, unknown> {
 	};
 }
 
-export function toolCallEnd(id: string, name: string, args: Record<string, unknown>): Record<string, unknown> {
+export function toolCallEnd(id: string, name: string, args: Record<string, unknown>): MessageUpdateEvent {
+	const toolCall: ToolCallContent = { type: "toolCall", id, name, arguments: args };
 	return {
 		type: "message_update",
 		message: MSG_STUB,
-		assistantMessageEvent: {
-			type: "toolcall_end",
-			toolCall: { type: "toolCall", id, name, arguments: args },
-		},
+		assistantMessageEvent: { type: "toolcall_end", toolCall },
 	};
 }
 
-export function toolExecutionStart(toolName: string): Record<string, unknown> {
+export function toolExecutionStart(toolName: string): ToolExecutionStartEvent {
 	return { type: "tool_execution_start", toolName };
 }
 
-export function toolExecutionEnd(toolName: string, resultText: string, isError = false): Record<string, unknown> {
+export function toolExecutionEnd(toolName: string, resultText: string, isError = false): ToolExecutionEndEvent {
 	return {
 		type: "tool_execution_end",
 		toolName,
@@ -210,27 +158,47 @@ export function toolExecutionEnd(toolName: string, resultText: string, isError =
 	};
 }
 
-export function messageEnd(content: Record<string, unknown>[]): Record<string, unknown> {
+export function messageEnd(content: MessageEndEvent["message"]["content"]): MessageEndEvent {
 	return {
 		type: "message_end",
 		message: { role: "assistant", content, timestamp: Date.now() },
 	};
 }
 
-export function extensionError(error: string): Record<string, unknown> {
+export function extensionError(error: string): ExtensionErrorEvent {
 	return { type: "extension_error", error };
 }
 
-export function sessionChanged(sessionId: string, reason: string, sessionName?: string): Record<string, unknown> {
+export function sessionChanged(
+	sessionId: string,
+	reason: SessionChangedEvent["reason"],
+	sessionName?: string,
+): SessionChangedEvent {
 	return { type: "session_changed", reason, sessionId, sessionName };
 }
 
-/** Shorthand for a successful RPC response. */
-export function successResponse(command: string, data?: unknown): Record<string, unknown> {
+/** Shorthand for a successful RPC response body. */
+export function successResponse(command: string, data?: unknown): RpcResponseBody {
 	return {
-		type: "response",
 		command,
 		success: true,
 		...(data !== undefined ? { data } : {}),
+	};
+}
+
+/** Shorthand for a bash handler response body. */
+export function bashResponse(result: BashResult): RpcResponseBody {
+	return {
+		command: "bash",
+		success: true,
+		data: result,
+	};
+}
+
+/** Shorthand for a message_start event (used for steering interweave). */
+export function messageStart(content: string): ServerEvent {
+	return {
+		type: "message_start",
+		message: { role: "user", content, timestamp: Date.now() },
 	};
 }
