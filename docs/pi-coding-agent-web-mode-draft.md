@@ -160,18 +160,22 @@ Limitations remain aligned with RPC mode unless expanded:
 ## Incremental implementation plan
 
 ### Milestone 1
+
 - extract protocol server core from `rpc-mode.ts`
 - keep `--mode rpc` behavior unchanged
 
 ### Milestone 2
+
 - add `--mode web` + websocket transport
 - minimal web UI: prompt/stream/abort/model/thinking
 
 ### Milestone 3
+
 - add tree/session/tool/reload protocol commands
 - full coding-agent workflow parity
 
 ### Milestone 4
+
 - extension UI polish, docs, and hardening
 
 ---

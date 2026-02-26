@@ -618,7 +618,7 @@ export async function main(args: string[]) {
 		process.exit(0);
 	}
 
-	// Read piped stdin content (if any) - skip for RPC/web modes which use stdin differently
+	// Read piped stdin content (if any) - skip for RPC/web mode which uses stdin for JSON-RPC
 	if (parsed.mode !== "rpc" && parsed.mode !== "web") {
 		const stdinContent = await readPipedStdin();
 		if (stdinContent !== undefined) {

@@ -15,50 +15,50 @@ import type { AgentSessionEvent } from "../../core/agent-session.js";
 // ============================================================================
 
 export interface RpcSessionSummary {
-	path: string;
-	id: string;
-	cwd: string;
-	name?: string;
-	parentSessionPath?: string;
-	created: string; // ISO string
-	modified: string; // ISO string
-	messageCount: number;
-	firstMessage: string;
-	allMessagesText: string;
+  path: string;
+  id: string;
+  cwd: string;
+  name?: string;
+  parentSessionPath?: string;
+  created: string; // ISO string
+  modified: string; // ISO string
+  messageCount: number;
+  firstMessage: string;
+  allMessagesText: string;
 }
 
 export interface RpcSessionTreeEntry {
-	id: string;
-	parentId: string | null;
-	type: string;
-	timestamp: string;
-	label?: string;
-	preview?: string; // short user/assistant preview text for UI tree list
+  id: string;
+  parentId: string | null;
+  type: string;
+  timestamp: string;
+  label?: string;
+  preview?: string; // short user/assistant preview text for UI tree list
 }
 
 export interface RpcSessionTreeNode {
-	entry: RpcSessionTreeEntry;
-	children: RpcSessionTreeNode[];
+  entry: RpcSessionTreeEntry;
+  children: RpcSessionTreeNode[];
 }
 
 export interface RpcSessionTree {
-	leafId: string | null;
-	nodes: RpcSessionTreeNode[];
+  leafId: string | null;
+  nodes: RpcSessionTreeNode[];
 }
 
 export interface RpcContextUsage {
-	tokens: number;
-	contextWindow: number;
-	percent: number;
-	usageTokens: number;
-	trailingTokens: number;
-	lastUsageIndex: number | null;
+  tokens: number;
+  contextWindow: number;
+  percent: number;
+  usageTokens: number;
+  trailingTokens: number;
+  lastUsageIndex: number | null;
 }
 
 export interface RpcToolInfo {
-	name: string;
-	description: string;
-	parameters: unknown;
+  name: string;
+  description: string;
+  parameters: unknown;
 }
 
 // ============================================================================
@@ -151,34 +151,34 @@ export interface RpcToolInfo {
 // ============================================================================
 
 export type RpcSessionChangedEvent = {
-	type: "session_changed";
-	reason: "new" | "switch" | "fork" | "tree" | "reload";
-	sessionId: string;
-	sessionFile?: string;
-	sessionName?: string;
-	messageCount: number;
-	leafId: string | null;
+  type: "session_changed";
+  reason: "new" | "switch" | "fork" | "tree" | "reload";
+  sessionId: string;
+  sessionFile?: string;
+  sessionName?: string;
+  messageCount: number;
+  leafId: string | null;
 };
 
 export type RpcQueueChangedEvent = {
-	type: "queue_changed";
-	pendingMessageCount: number;
+  type: "queue_changed";
+  pendingMessageCount: number;
 };
 
 export type RpcExtensionErrorEvent = {
-	type: "extension_error";
-	extensionPath: string;
-	event: string;
-	error: string;
+  type: "extension_error";
+  extensionPath: string;
+  event: string;
+  error: string;
 };
 
 // Unified stream events for WebSocket clients (optional but useful)
 export type RpcServerEvent =
-	| AgentSessionEvent
-	| RpcExtensionUIRequest
-	| RpcSessionChangedEvent
-	| RpcQueueChangedEvent
-	| RpcExtensionErrorEvent;
+  | AgentSessionEvent
+  | RpcExtensionUIRequest
+  | RpcSessionChangedEvent
+  | RpcQueueChangedEvent
+  | RpcExtensionErrorEvent;
 ```
 
 ---
@@ -240,17 +240,17 @@ Extend `rpc-types` imports:
 
 ```ts
 import type {
-	RpcCommand,
-	RpcExtensionUIRequest,
-	RpcExtensionUIResponse,
-	RpcResponse,
-	RpcSessionState,
-	RpcSlashCommand,
-	RpcSessionSummary,
-	RpcSessionTree,
-	RpcSessionTreeEntry,
-	RpcSessionTreeNode,
-	RpcToolInfo,
+  RpcCommand,
+  RpcExtensionUIRequest,
+  RpcExtensionUIResponse,
+  RpcResponse,
+  RpcSessionState,
+  RpcSlashCommand,
+  RpcSessionSummary,
+  RpcSessionTree,
+  RpcSessionTreeEntry,
+  RpcSessionTreeNode,
+  RpcToolInfo,
 } from "./rpc-types.js";
 ```
 
@@ -260,110 +260,118 @@ Place before `handleCommand`:
 
 ```ts
 const getCommandsSnapshot = (): RpcSlashCommand[] => {
-	const commands: RpcSlashCommand[] = [];
+  const commands: RpcSlashCommand[] = [];
 
-	for (const { command, extensionPath } of session.extensionRunner?.getRegisteredCommandsWithPaths() ?? []) {
-		commands.push({
-			name: command.name,
-			description: command.description,
-			source: "extension",
-			path: extensionPath,
-		});
-	}
+  for (const {
+    command,
+    extensionPath,
+  } of session.extensionRunner?.getRegisteredCommandsWithPaths() ?? []) {
+    commands.push({
+      name: command.name,
+      description: command.description,
+      source: "extension",
+      path: extensionPath,
+    });
+  }
 
-	for (const template of session.promptTemplates) {
-		commands.push({
-			name: template.name,
-			description: template.description,
-			source: "prompt",
-			location: template.source as RpcSlashCommand["location"],
-			path: template.filePath,
-		});
-	}
+  for (const template of session.promptTemplates) {
+    commands.push({
+      name: template.name,
+      description: template.description,
+      source: "prompt",
+      location: template.source as RpcSlashCommand["location"],
+      path: template.filePath,
+    });
+  }
 
-	for (const skill of session.resourceLoader.getSkills().skills) {
-		commands.push({
-			name: `skill:${skill.name}`,
-			description: skill.description,
-			source: "skill",
-			location: skill.source as RpcSlashCommand["location"],
-			path: skill.filePath,
-		});
-	}
+  for (const skill of session.resourceLoader.getSkills().skills) {
+    commands.push({
+      name: `skill:${skill.name}`,
+      description: skill.description,
+      source: "skill",
+      location: skill.source as RpcSlashCommand["location"],
+      path: skill.filePath,
+    });
+  }
 
-	return commands;
+  return commands;
 };
 
-const emitSessionChanged = (reason: "new" | "switch" | "fork" | "tree" | "reload") => {
-	output({
-		type: "session_changed",
-		reason,
-		sessionId: session.sessionId,
-		sessionFile: session.sessionFile,
-		sessionName: session.sessionName,
-		messageCount: session.messages.length,
-		leafId: session.sessionManager.getLeafId(),
-	});
+const emitSessionChanged = (
+  reason: "new" | "switch" | "fork" | "tree" | "reload",
+) => {
+  output({
+    type: "session_changed",
+    reason,
+    sessionId: session.sessionId,
+    sessionFile: session.sessionFile,
+    sessionName: session.sessionName,
+    messageCount: session.messages.length,
+    leafId: session.sessionManager.getLeafId(),
+  });
 };
 
 const extractPreviewText = (entry: any): string | undefined => {
-	if (!entry || typeof entry !== "object") return undefined;
+  if (!entry || typeof entry !== "object") return undefined;
 
-	if (entry.type === "message") {
-		const msg = entry.message;
-		if (!msg) return undefined;
+  if (entry.type === "message") {
+    const msg = entry.message;
+    if (!msg) return undefined;
 
-		if (msg.role === "user") {
-			if (typeof msg.content === "string") return msg.content.slice(0, 140);
-			if (Array.isArray(msg.content)) {
-				const text = msg.content
-					.filter((c: any) => c?.type === "text" && typeof c.text === "string")
-					.map((c: any) => c.text)
-					.join(" ");
-				return text.slice(0, 140) || undefined;
-			}
-			return undefined;
-		}
+    if (msg.role === "user") {
+      if (typeof msg.content === "string") return msg.content.slice(0, 140);
+      if (Array.isArray(msg.content)) {
+        const text = msg.content
+          .filter((c: any) => c?.type === "text" && typeof c.text === "string")
+          .map((c: any) => c.text)
+          .join(" ");
+        return text.slice(0, 140) || undefined;
+      }
+      return undefined;
+    }
 
-		if (msg.role === "assistant" && Array.isArray(msg.content)) {
-			const text = msg.content
-				.filter((c: any) => c?.type === "text" && typeof c.text === "string")
-				.map((c: any) => c.text)
-				.join(" ");
-			return text.slice(0, 140) || undefined;
-		}
+    if (msg.role === "assistant" && Array.isArray(msg.content)) {
+      const text = msg.content
+        .filter((c: any) => c?.type === "text" && typeof c.text === "string")
+        .map((c: any) => c.text)
+        .join(" ");
+      return text.slice(0, 140) || undefined;
+    }
 
-		if (msg.role === "toolResult") {
-			return `[toolResult:${msg.toolName}]`;
-		}
-	}
+    if (msg.role === "toolResult") {
+      return `[toolResult:${msg.toolName}]`;
+    }
+  }
 
-	if (entry.type === "compaction") return "[compaction]";
-	if (entry.type === "branch_summary") return "[branch_summary]";
-	if (entry.type === "custom_message") return "[custom_message]";
-	if (entry.type === "custom") return "[custom]";
-	if (entry.type === "model_change") return `[model:${entry.provider}/${entry.modelId}]`;
-	if (entry.type === "thinking_level_change") return `[thinking:${entry.thinkingLevel}]`;
-	if (entry.type === "label") return `[label:${entry.label ?? ""}]`;
-	if (entry.type === "session_info") return `[session_info:${entry.name ?? ""}]`;
+  if (entry.type === "compaction") return "[compaction]";
+  if (entry.type === "branch_summary") return "[branch_summary]";
+  if (entry.type === "custom_message") return "[custom_message]";
+  if (entry.type === "custom") return "[custom]";
+  if (entry.type === "model_change")
+    return `[model:${entry.provider}/${entry.modelId}]`;
+  if (entry.type === "thinking_level_change")
+    return `[thinking:${entry.thinkingLevel}]`;
+  if (entry.type === "label") return `[label:${entry.label ?? ""}]`;
+  if (entry.type === "session_info")
+    return `[session_info:${entry.name ?? ""}]`;
 
-	return undefined;
+  return undefined;
 };
 
 const mapTreeNode = (node: any): RpcSessionTreeNode => {
-	const entry: RpcSessionTreeEntry = {
-		id: node.entry.id,
-		parentId: node.entry.parentId,
-		type: node.entry.type,
-		timestamp: node.entry.timestamp,
-		label: node.label,
-		preview: extractPreviewText(node.entry),
-	};
+  const entry: RpcSessionTreeEntry = {
+    id: node.entry.id,
+    parentId: node.entry.parentId,
+    type: node.entry.type,
+    timestamp: node.entry.timestamp,
+    label: node.label,
+    preview: extractPreviewText(node.entry),
+  };
 
-	return {
-		entry,
-		children: (node.children ?? []).map((child: any) => mapTreeNode(child)),
-	};
+  return {
+    entry,
+    children: (node.children ?? []).map((child: any) => mapTreeNode(child)),
+  };
 };
 ```
 
@@ -522,14 +530,14 @@ Update imports from `./rpc-types.js`:
 
 ```ts
 import type {
-	RpcCommand,
-	RpcResponse,
-	RpcSessionState,
-	RpcSlashCommand,
-	RpcContextUsage,
-	RpcSessionSummary,
-	RpcSessionTree,
-	RpcToolInfo,
+  RpcCommand,
+  RpcResponse,
+  RpcSessionState,
+  RpcSlashCommand,
+  RpcContextUsage,
+  RpcSessionSummary,
+  RpcSessionTree,
+  RpcToolInfo,
 } from "./rpc-types.js";
 ```
 

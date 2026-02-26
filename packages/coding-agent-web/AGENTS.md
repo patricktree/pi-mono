@@ -23,6 +23,7 @@ After **any** change to UI components, state logic, styles, or the protocol clie
 Tests use a real WebSocket connection. Each test spins up a `TestWsServer` (Node.js `ws` server on port 0) that acts as a fake backend. The app connects to it via the `?ws=` query param override in `getWebSocketUrl()`. This exercises the full transport layer (`WsClient`, JSON serialization, WebSocket lifecycle) — no in-process mocks, no `window.__piTestApi`.
 
 Key patterns:
+
 - `setupApp()` creates a server, registers default handlers, navigates the page, and waits for "Connected". Returns the server instance.
 - `server.setStaticHandler(type, response)` — register a canned RPC response.
 - `server.emitEvent(event)` / `server.emitEvents([...])` — push server events to the client.

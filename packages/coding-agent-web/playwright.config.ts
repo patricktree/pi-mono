@@ -8,7 +8,7 @@ const isCI = !!process.env.CI;
 const useDocker = !isDebug;
 
 export default defineConfig({
-	testDir: "./tests",
+	testDir: "./test",
 	fullyParallel: true,
 	forbidOnly: isCI,
 	retries: isCI ? 2 : 0,
