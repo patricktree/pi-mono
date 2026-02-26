@@ -1,5 +1,5 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { css, cx } from "@linaria/core";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { BottomToolbar } from "./components/BottomToolbar.js";
@@ -78,6 +78,7 @@ export function App() {
 	const transportRef = useRef<Transport | undefined>(undefined);
 	const protocolRef = useRef<ProtocolClient | undefined>(undefined);
 	const messageControllerRef = useRef(new MessageController());
+	const activeSessionIdRef = useRef<string | null>(null);
 
 	const {
 		connected,
@@ -127,28 +128,24 @@ export function App() {
 		})),
 	);
 
+	const getProtocolClient = useCallback((): ProtocolClient => {
+		const protocolClient = protocolRef.current;
+		if (!protocolClient) {
+			throw new Error("Protocol client is not initialized");
+		}
+		return protocolClient;
+	}, []);
+
 	const sessionStateQuery = useQuery({
 		queryKey: SESSION_STATE_QUERY_KEY,
 		enabled: connected,
-		queryFn: async () => {
-			const protocolClient = protocolRef.current;
-			if (!protocolClient) {
-				throw new Error("Protocol client is not initialized");
-			}
-			return protocolClient.getState();
-		},
+		queryFn: () => getProtocolClient().getState(),
 	});
 
 	const sessionsQuery = useQuery({
 		queryKey: SESSIONS_QUERY_KEY,
 		enabled: connected,
-		queryFn: async () => {
-			const protocolClient = protocolRef.current;
-			if (!protocolClient) {
-				throw new Error("Protocol client is not initialized");
-			}
-			return protocolClient.listSessions();
-		},
+		queryFn: () => getProtocolClient().listSessions(),
 	});
 
 	const currentSessionId = sessionStateQuery.data?.sessionId ?? null;
@@ -159,11 +156,7 @@ export function App() {
 		queryKey: messagesQueryKey,
 		enabled: connected && currentSessionId !== null,
 		queryFn: async () => {
-			const protocolClient = protocolRef.current;
-			if (!protocolClient) {
-				throw new Error("Protocol client is not initialized");
-			}
-			const history = await protocolClient.getMessages();
+			const history = await getProtocolClient().getMessages();
 			return messageControllerRef.current.loadMessagesFromHistory(history);
 		},
 	});
@@ -171,13 +164,7 @@ export function App() {
 	useQuery({
 		queryKey: contextQueryKey,
 		enabled: connected && currentSessionId !== null,
-		queryFn: async () => {
-			const protocolClient = protocolRef.current;
-			if (!protocolClient) {
-				throw new Error("Protocol client is not initialized");
-			}
-			return protocolClient.getContextUsage();
-		},
+		queryFn: () => getProtocolClient().getContextUsage(),
 	});
 
 	const appendMessage = useCallback(
@@ -192,86 +179,36 @@ export function App() {
 
 	const appendErrorMessage = useCallback(
 		(text: string): void => {
-			const sessionId = queryClient.getQueryData<SessionState>(SESSION_STATE_QUERY_KEY)?.sessionId ?? null;
 			const message = messageControllerRef.current.createErrorMessage(text);
-			appendMessage(sessionId, message);
+			appendMessage(activeSessionIdRef.current, message);
 		},
-		[appendMessage, queryClient],
+		[appendMessage],
 	);
 
 	const appendBashResultMessage = useCallback(
 		(command: string, output: string, exitCode: number | undefined): void => {
-			const sessionId = queryClient.getQueryData<SessionState>(SESSION_STATE_QUERY_KEY)?.sessionId ?? null;
 			const message = messageControllerRef.current.createBashResultMessage(command, output, exitCode);
-			appendMessage(sessionId, message);
+			appendMessage(activeSessionIdRef.current, message);
 		},
-		[appendMessage, queryClient],
+		[appendMessage],
 	);
 
-	const refreshSessionState = useCallback(async (): Promise<{ sessionState: SessionState; sessions: SessionSummary[] } | undefined> => {
-		const protocolClient = protocolRef.current;
-		if (!protocolClient) {
-			return undefined;
-		}
-
-		try {
-			const [sessionState, sessions] = await Promise.all([
-				queryClient.fetchQuery({
-					queryKey: SESSION_STATE_QUERY_KEY,
-					queryFn: () => protocolClient.getState(),
-				}),
-				queryClient.fetchQuery({
-					queryKey: SESSIONS_QUERY_KEY,
-					queryFn: () => protocolClient.listSessions(),
-				}),
-			]);
-			return { sessionState, sessions };
-		} catch (refreshError) {
-			log("failed to refresh session state:", refreshError);
-			return undefined;
-		}
+	const invalidateSessionQueries = useCallback(async (): Promise<void> => {
+		await Promise.all([
+			queryClient.invalidateQueries({ queryKey: SESSION_STATE_QUERY_KEY }),
+			queryClient.invalidateQueries({ queryKey: SESSIONS_QUERY_KEY }),
+			queryClient.invalidateQueries({ queryKey: ["ui-messages"] }),
+			queryClient.invalidateQueries({ queryKey: ["context-usage"] }),
+		]);
 	}, [queryClient]);
 
-	const refreshMessages = useCallback(
-		async (sessionId: string | null): Promise<void> => {
-			const protocolClient = protocolRef.current;
-			if (!protocolClient || !sessionId) {
-				return;
-			}
-
-			try {
-				await queryClient.fetchQuery({
-					queryKey: uiMessagesQueryKey(sessionId),
-					queryFn: async () => {
-						const history = await protocolClient.getMessages();
-						return messageControllerRef.current.loadMessagesFromHistory(history);
-					},
-				});
-			} catch (refreshError) {
-				log("failed to refresh message history:", refreshError);
-			}
-		},
-		[queryClient],
-	);
-
-	const refreshContextUsage = useCallback(
-		async (sessionId: string | null): Promise<void> => {
-			const protocolClient = protocolRef.current;
-			if (!protocolClient || !sessionId) {
-				return;
-			}
-
-			try {
-				await queryClient.fetchQuery({
-					queryKey: contextUsageQueryKey(sessionId),
-					queryFn: () => protocolClient.getContextUsage(),
-				});
-			} catch (refreshError) {
-				log("failed to fetch context usage:", refreshError);
-			}
-		},
-		[queryClient],
-	);
+	const resetSessionUiState = useCallback((): void => {
+		messageControllerRef.current.resetActiveMessageIds();
+		clearExpandedTools();
+		setPrompt("");
+		clearPendingImages();
+		setInputMode("prompt");
+	}, [clearExpandedTools, clearPendingImages, setInputMode, setPrompt]);
 
 	const handleExtensionUiRequest = useCallback((event: ExtensionUiRequestEvent) => {
 		const protocolClient = protocolRef.current;
@@ -320,41 +257,39 @@ export function App() {
 			}
 
 			try {
-				const refreshed = await refreshSessionState();
-				if (!refreshed) {
-					return;
-				}
+				const [initialSessionState, sessions] = await Promise.all([
+					queryClient.fetchQuery({
+						queryKey: SESSION_STATE_QUERY_KEY,
+						queryFn: () => protocolClient.getState(),
+					}),
+					queryClient.fetchQuery({
+						queryKey: SESSIONS_QUERY_KEY,
+						queryFn: () => protocolClient.listSessions(),
+					}),
+				]);
+				let sessionState = initialSessionState;
 
-				let sessionState = refreshed.sessionState;
-				const sortedSessions = sortSessions(refreshed.sessions);
-
+				const sortedSessions = sortSessions(sessions);
 				const urlSessionId = getSessionFromUrl();
 				const urlSession = urlSessionId ? sortedSessions.find((session) => session.id === urlSessionId) : undefined;
-				let switched = false;
+				const fallbackSession = urlSession ? undefined : sortedSessions[0];
+				const targetSession = urlSession ?? fallbackSession;
 
-				if (urlSession && urlSession.id !== sessionState.sessionId) {
-					log("restoring session from URL:", urlSession.id, urlSession.name ?? urlSession.firstMessage);
-					await protocolClient.switchSession(urlSession.path);
-					switched = true;
-				} else if (!urlSession) {
-					const lastSession = sortedSessions.length > 0 ? sortedSessions[0] : undefined;
-					if (lastSession && lastSession.id !== sessionState.sessionId) {
-						log("resuming last session:", lastSession.id, lastSession.name ?? lastSession.firstMessage);
-						await protocolClient.switchSession(lastSession.path);
-						switched = true;
+				if (targetSession && targetSession.id !== sessionState.sessionId) {
+					if (urlSession) {
+						log("restoring session from URL:", targetSession.id, targetSession.name ?? targetSession.firstMessage);
+					} else {
+						log("resuming last session:", targetSession.id, targetSession.name ?? targetSession.firstMessage);
 					}
+					await protocolClient.switchSession(targetSession.path);
+					await invalidateSessionQueries();
+					sessionState = await queryClient.fetchQuery({
+						queryKey: SESSION_STATE_QUERY_KEY,
+						queryFn: () => protocolClient.getState(),
+					});
 				}
 
-				if (switched) {
-					const afterSwitch = await refreshSessionState();
-					if (afterSwitch) {
-						sessionState = afterSwitch.sessionState;
-					}
-				}
-
-				await refreshMessages(sessionState.sessionId);
-				void refreshContextUsage(sessionState.sessionId);
-
+				activeSessionIdRef.current = sessionState.sessionId;
 				if (mockAutoPrompt) {
 					appendMessage(sessionState.sessionId, messageControllerRef.current.createUserMessage(mockAutoPrompt));
 				}
@@ -365,7 +300,7 @@ export function App() {
 				log("failed to load session state:", loadError);
 			}
 		},
-		[addScheduledMessage, appendMessage, refreshContextUsage, refreshMessages, refreshSessionState],
+		[addScheduledMessage, appendMessage, invalidateSessionQueries, queryClient],
 	);
 
 	useEffect(() => {
@@ -398,7 +333,7 @@ export function App() {
 				setStreaming(false);
 			}
 
-			const sessionId = queryClient.getQueryData<SessionState>(SESSION_STATE_QUERY_KEY)?.sessionId ?? null;
+			const sessionId = activeSessionIdRef.current;
 			if (event.type === "message_start") {
 				const text = extractUserTextFromMessageStart(event.message);
 				if (text) {
@@ -419,19 +354,32 @@ export function App() {
 				handleExtensionUiRequest(event);
 			}
 			if (event.type === "session_changed") {
+				activeSessionIdRef.current = event.sessionId;
 				messageControllerRef.current.resetActiveMessageIds();
-				// Invalidate session state and sessions list; when the session
-				// state refetches, currentSessionId changes which updates the
-				// messages and context-usage query keys, triggering fresh fetches
-				// for the new session. Broad prefix invalidation ensures cached
-				// data from previously-visited sessions is also marked stale.
-				void queryClient.invalidateQueries({ queryKey: SESSION_STATE_QUERY_KEY });
-				void queryClient.invalidateQueries({ queryKey: SESSIONS_QUERY_KEY });
-				void queryClient.invalidateQueries({ queryKey: ["ui-messages"] });
-				void queryClient.invalidateQueries({ queryKey: ["context-usage"] });
+				queryClient.setQueryData<SessionState>(SESSION_STATE_QUERY_KEY, (current) => ({
+					sessionId: event.sessionId,
+					sessionName: event.sessionName ?? current?.sessionName,
+					thinkingLevel: current?.thinkingLevel,
+				}));
+				void invalidateSessionQueries();
+				void queryClient.fetchQuery({
+					queryKey: uiMessagesQueryKey(event.sessionId),
+					queryFn: async () => {
+						const history = await getProtocolClient().getMessages();
+						return messageControllerRef.current.loadMessagesFromHistory(history);
+					},
+				});
+				void queryClient.fetchQuery({
+					queryKey: contextUsageQueryKey(event.sessionId),
+					queryFn: () => getProtocolClient().getContextUsage(),
+				});
 			}
 			if (event.type === "agent_end") {
-				void queryClient.invalidateQueries({ queryKey: ["context-usage"] });
+				if (activeSessionIdRef.current) {
+					void queryClient.invalidateQueries({ queryKey: contextUsageQueryKey(activeSessionIdRef.current) });
+				} else {
+					void queryClient.invalidateQueries({ queryKey: ["context-usage"] });
+				}
 			}
 		});
 
@@ -439,6 +387,7 @@ export function App() {
 			setConnected(isConnected);
 			if (!isConnected) {
 				setStreaming(false);
+				activeSessionIdRef.current = null;
 				return;
 			}
 			void onConnected(mockAutoPrompt, mockAutoSteeringPrompt);
@@ -459,12 +408,18 @@ export function App() {
 	}, [
 		appendMessage,
 		consumeScheduledMessage,
+		getProtocolClient,
 		handleExtensionUiRequest,
+		invalidateSessionQueries,
 		onConnected,
 		queryClient,
 		setConnected,
 		setStreaming,
 	]);
+
+	useEffect(() => {
+		activeSessionIdRef.current = currentSessionId;
+	}, [currentSessionId]);
 
 	// Sync current session ID to URL so reloading the tab restores the session.
 	// Skip null (initial "not yet determined" state) to avoid wiping the URL
@@ -536,10 +491,11 @@ export function App() {
 		}
 
 		const userMessage = messageControllerRef.current.createUserMessage(message || "(image attachment)", { images });
+		const targetSessionId = activeSessionIdRef.current ?? currentSessionId;
 		if (streaming) {
 			addScheduledMessage(userMessage);
 		} else {
-			appendMessage(currentSessionId, userMessage);
+			appendMessage(targetSessionId, userMessage);
 		}
 		setPrompt("");
 		clearPendingImages();
@@ -616,31 +572,13 @@ export function App() {
 		setSidebarOpen(false);
 		try {
 			await protocolClient.newSession();
-			messageControllerRef.current.resetActiveMessageIds();
-			clearExpandedTools();
-			setPrompt("");
-			clearPendingImages();
-			setInputMode("prompt");
-
-			const refreshed = await refreshSessionState();
-			const sessionId = refreshed?.sessionState.sessionId ?? null;
-			await refreshMessages(sessionId);
-			void refreshContextUsage(sessionId);
+			resetSessionUiState();
+			await invalidateSessionQueries();
 		} catch (sessionError) {
 			const messageText = sessionError instanceof Error ? sessionError.message : String(sessionError);
 			appendErrorMessage(`Failed to create session: ${messageText}`);
 		}
-	}, [
-		appendErrorMessage,
-		clearExpandedTools,
-		clearPendingImages,
-		refreshContextUsage,
-		refreshMessages,
-		refreshSessionState,
-		setInputMode,
-		setPrompt,
-		setSidebarOpen,
-	]);
+	}, [appendErrorMessage, invalidateSessionQueries, resetSessionUiState, setSidebarOpen]);
 
 	const sessions = useMemo(() => sortSessions(sessionsQuery.data ?? []), [sessionsQuery.data]);
 
@@ -659,33 +597,14 @@ export function App() {
 			setSidebarOpen(false);
 			try {
 				await protocolClient.switchSession(session.path);
-				messageControllerRef.current.resetActiveMessageIds();
-				clearExpandedTools();
-				setPrompt("");
-				clearPendingImages();
-				setInputMode("prompt");
-
-				const refreshed = await refreshSessionState();
-				const sessionId = refreshed?.sessionState.sessionId ?? session.id;
-				await refreshMessages(sessionId);
-				void refreshContextUsage(sessionId);
+				resetSessionUiState();
+				await invalidateSessionQueries();
 			} catch (switchError) {
 				const messageText = switchError instanceof Error ? switchError.message : String(switchError);
 				appendErrorMessage(`Failed to switch session: ${messageText}`);
 			}
 		},
-		[
-			appendErrorMessage,
-			clearExpandedTools,
-			clearPendingImages,
-			currentSessionId,
-			refreshContextUsage,
-			refreshMessages,
-			refreshSessionState,
-			setInputMode,
-			setPrompt,
-			setSidebarOpen,
-		],
+		[appendErrorMessage, currentSessionId, invalidateSessionQueries, resetSessionUiState, setSidebarOpen],
 	);
 
 	const onThinkingLevelChange = useCallback(
