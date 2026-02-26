@@ -88,14 +88,41 @@ export type AssistantMessageEvent =
 	| { type: "done" }
 	| { type: "error" };
 
-export interface RpcResponse {
-	id?: string;
-	type: "response";
-	command: string;
-	success: boolean;
-	data?: unknown;
-	error?: string;
+// ---------------------------------------------------------------------------
+// RPC response data map — maps each command type to its success response data.
+// Commands that carry no data map to `undefined`.
+// ---------------------------------------------------------------------------
+
+export interface RpcResponseDataMap {
+	prompt: undefined;
+	abort: undefined;
+	clear_queue: undefined;
+	list_sessions: { sessions: SessionSummary[] };
+	switch_session: { cancelled: boolean };
+	new_session: { cancelled: boolean };
+	get_messages: { messages: HistoryMessage[] };
+	get_state: { sessionId: string; sessionName?: string; thinkingLevel?: ThinkingLevel };
+	set_thinking_level: undefined;
+	get_context_usage: { usage?: ContextUsage };
+	bash: BashResult;
+	abort_bash: undefined;
 }
+
+/** Per-command success variants: includes `data` only for commands that carry data. */
+type RpcSuccessResponses = {
+	[C in ClientCommand["type"]]: RpcResponseDataMap[C] extends undefined
+		? { id?: string; type: "response"; command: C; success: true }
+		: { id?: string; type: "response"; command: C; success: true; data: RpcResponseDataMap[C] };
+};
+
+export type RpcResponse =
+	| RpcSuccessResponses[ClientCommand["type"]]
+	| { id?: string; type: "response"; command: string; success: false; error: string };
+
+/** Narrow `RpcResponse` to the variants for a specific command type. */
+export type RpcResponseFor<C extends ClientCommand["type"]> =
+	| Extract<RpcResponse, { command: C; success: true }>
+	| Extract<RpcResponse, { success: false }>;
 
 export interface AgentStartEvent {
 	type: "agent_start";

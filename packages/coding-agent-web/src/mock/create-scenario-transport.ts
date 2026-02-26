@@ -1,4 +1,9 @@
-import type { SetThinkingLevelCommand, SwitchSessionCommand } from "../protocol/types.js";
+import type {
+	HistoryMessage,
+	SetThinkingLevelCommand,
+	SwitchSessionCommand,
+	ThinkingLevel,
+} from "../protocol/types.js";
 import { TestTransport } from "../transport/test-transport.js";
 import type { Scenario } from "./scenarios.js";
 
@@ -23,7 +28,7 @@ export function createScenarioTransport(
 ): { transport: TestTransport; autoPrompt: string | undefined; autoSteeringPrompt: string | undefined } {
 	const transport = new TestTransport();
 	let activeSessionId = "session_new";
-	let mockThinkingLevel = "medium";
+	let mockThinkingLevel: ThinkingLevel = "medium";
 
 	// -- get_state ------------------------------------------------------------
 
@@ -37,7 +42,6 @@ export function createScenarioTransport(
 			data: {
 				sessionId: activeSessionId,
 				sessionName: SESSION_NAMES[activeSessionId],
-				isStreaming: false,
 				thinkingLevel: mockThinkingLevel,
 			},
 		};
@@ -52,7 +56,7 @@ export function createScenarioTransport(
 			id: cmd.id,
 			command: "get_messages",
 			success: true,
-			data: { messages: getMockMessages(activeSessionId) },
+			data: { messages: getMockMessages(activeSessionId) as HistoryMessage[] },
 		};
 	});
 

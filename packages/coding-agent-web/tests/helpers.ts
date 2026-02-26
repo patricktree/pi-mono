@@ -10,14 +10,16 @@ import type {
 	HistoryMessage,
 	MessageEndEvent,
 	MessageUpdateEvent,
+	RpcResponseDataMap,
 	ServerEvent,
 	SessionChangedEvent,
 	SessionSummary,
+	ThinkingLevel,
 	ToolCallContent,
 	ToolExecutionEndEvent,
 	ToolExecutionStartEvent,
 } from "../src/protocol/types.js";
-import type { RpcResponseBody, TestWsServer } from "./test-ws-server.js";
+import type { RpcResponseBodyFor, TestWsServer } from "./test-ws-server.js";
 
 // ---------------------------------------------------------------------------
 // Setup options
@@ -25,12 +27,12 @@ import type { RpcResponseBody, TestWsServer } from "./test-ws-server.js";
 
 export interface SetupOptions {
 	sessionId?: string;
-	thinkingLevel?: string;
+	thinkingLevel?: ThinkingLevel;
 	sessions?: SessionSummary[];
 	messages?: HistoryMessage[];
 	contextUsage?: ContextUsage | null;
 	/** Extra handlers keyed by command type. Values are RPC response bodies. */
-	handlers?: Partial<Record<ClientCommand["type"], RpcResponseBody>>;
+	handlers?: { [C in ClientCommand["type"]]?: RpcResponseBodyFor<C> };
 }
 
 // ---------------------------------------------------------------------------
@@ -73,14 +75,16 @@ export async function setupApp(server: TestWsServer, page: Page, options: SetupO
 		data: {
 			usage:
 				options.contextUsage === null
-					? null
+					? undefined
 					: (options.contextUsage ?? { tokens: 1000, contextWindow: 200000, percent: 0.5 }),
 		},
 	});
 
 	if (options.handlers) {
 		for (const [type, response] of Object.entries(options.handlers)) {
-			server.setStaticHandler(type as ClientCommand["type"], response);
+			// The per-key typing is validated at the SetupOptions call site;
+			// Object.entries loses the key–value relationship so we cast here.
+			server.setStaticHandler(type as ClientCommand["type"], response as RpcResponseBodyFor<ClientCommand["type"]>);
 		}
 	}
 
@@ -178,16 +182,19 @@ export function sessionChanged(
 }
 
 /** Shorthand for a successful RPC response body. */
-export function successResponse(command: string, data?: unknown): RpcResponseBody {
-	return {
-		command,
-		success: true,
-		...(data !== undefined ? { data } : {}),
-	};
+export function successResponse<C extends ClientCommand["type"]>(
+	command: C,
+	...args: RpcResponseDataMap[C] extends undefined ? [] : [data: RpcResponseDataMap[C]]
+): RpcResponseBodyFor<C> {
+	const [data] = args;
+	if (data !== undefined) {
+		return { command, success: true, data } as RpcResponseBodyFor<C>;
+	}
+	return { command, success: true } as RpcResponseBodyFor<C>;
 }
 
 /** Shorthand for a bash handler response body. */
-export function bashResponse(result: BashResult): RpcResponseBody {
+export function bashResponse(result: BashResult): RpcResponseBodyFor<"bash"> {
 	return {
 		command: "bash",
 		success: true,

@@ -1,14 +1,30 @@
 import { type WebSocket, WebSocketServer } from "ws";
-import type { ClientCommand, RpcResponse, ServerEvent } from "../src/protocol/types.js";
+import type { ClientCommand, RpcResponse, RpcResponseDataMap, ServerEvent } from "../src/protocol/types.js";
+
+/** Per-command success bodies: includes `data` only for commands that carry data. */
+type RpcSuccessBodies = {
+	[C in ClientCommand["type"]]: RpcResponseDataMap[C] extends undefined
+		? { command: C; success: true }
+		: { command: C; success: true; data: RpcResponseDataMap[C] };
+};
 
 /** RPC response body without `id` and `type` — the server injects those. */
-export type RpcResponseBody = Omit<RpcResponse, "id" | "type">;
+export type RpcResponseBody =
+	| RpcSuccessBodies[ClientCommand["type"]]
+	| { command: ClientCommand["type"]; success: false; error: string };
+
+/** Narrow `RpcResponseBody` to the variants for a specific command type. */
+export type RpcResponseBodyFor<C extends ClientCommand["type"]> =
+	| Extract<RpcResponseBody, { command: C; success: true }>
+	| Extract<RpcResponseBody, { success: false }>;
 
 /**
  * Response handler: receives the parsed client command and returns a response
  * body. The server wraps it with `id` (from the command) and `type: "response"`.
  */
-export type RequestHandler = (command: ClientCommand) => RpcResponseBody;
+export type RequestHandler<T extends ClientCommand["type"] = ClientCommand["type"]> = (
+	command: Extract<ClientCommand, { type: T }>,
+) => RpcResponseBodyFor<T>;
 
 /**
  * A lightweight WebSocket server for E2E tests.
@@ -22,7 +38,7 @@ export type RequestHandler = (command: ClientCommand) => RpcResponseBody;
 export class TestWsServer {
 	private wss: WebSocketServer;
 	private client: WebSocket | null = null;
-	private handlers = new Map<string, RequestHandler>();
+	private handlers = new Map<ClientCommand["type"], RequestHandler>();
 	private _port: number;
 
 	private constructor(wss: WebSocketServer, port: number) {
@@ -59,12 +75,7 @@ export class TestWsServer {
 				}
 
 				const body = handler(command);
-				const response: RpcResponse = {
-					...body,
-					id: command.id,
-					type: "response",
-				};
-				ws.send(JSON.stringify(response));
+				ws.send(JSON.stringify({ ...body, id: command.id, type: "response" }));
 			});
 
 			ws.on("close", () => {
@@ -104,15 +115,17 @@ export class TestWsServer {
 	 * Register a handler for a command type. The handler receives the full
 	 * parsed command and returns the response body (without `id` or `type`).
 	 */
-	setHandler(commandType: ClientCommand["type"], handler: RequestHandler): void {
-		this.handlers.set(commandType, handler);
+	setHandler<T extends ClientCommand["type"]>(commandType: T, handler: RequestHandler<T>): void {
+		// The map stores the general RequestHandler type; the generic signature
+		// on this method guarantees callers pass a correctly-narrowed handler.
+		this.handlers.set(commandType, handler as unknown as RequestHandler);
 	}
 
 	/**
 	 * Convenience: register a handler that always returns a static response body.
 	 */
-	setStaticHandler(commandType: ClientCommand["type"], response: RpcResponseBody): void {
-		this.handlers.set(commandType, () => response);
+	setStaticHandler<C extends ClientCommand["type"]>(commandType: C, response: RpcResponseBodyFor<C>): void {
+		this.handlers.set(commandType, (() => response) as unknown as RequestHandler);
 	}
 
 	/**

@@ -74,7 +74,7 @@ test.describe("sidebar", () => {
 			sessions: mockSessions(),
 			messages: [{ role: "user", content: "Old message", timestamp: NOW }],
 			handlers: {
-				new_session: successResponse("new_session"),
+				new_session: successResponse("new_session", { cancelled: false }),
 			},
 		});
 
@@ -107,7 +107,7 @@ test.describe("sidebar", () => {
 			sessions: mockSessions(),
 			messages: [{ role: "user", content: "Session 1 message", timestamp: NOW }],
 			handlers: {
-				switch_session: successResponse("switch_session"),
+				switch_session: successResponse("switch_session", { cancelled: false }),
 			},
 		});
 

@@ -1,11 +1,13 @@
 import type { Transport } from "../transport/transport.js";
 import type {
 	BashResult,
+	ClientCommand,
 	ContextUsage,
 	ExtensionUiResponse,
 	HistoryMessage,
 	ImageContent,
 	RpcResponse,
+	RpcResponseFor,
 	SessionSummary,
 	ThinkingLevel,
 } from "./types.js";
@@ -15,6 +17,15 @@ export class ProtocolClient {
 
 	constructor(transport: Transport) {
 		this.transport = transport;
+	}
+
+	/**
+	 * Send a command and narrow the response to the matching command type.
+	 * The cast is safe: the protocol guarantees the server returns the correct
+	 * data shape for each command.
+	 */
+	private async typedRequest<C extends ClientCommand>(command: C): Promise<RpcResponseFor<C["type"]>> {
+		return this.transport.request(command) as Promise<RpcResponseFor<C["type"]>>;
 	}
 
 	async prompt(
@@ -42,96 +53,82 @@ export class ProtocolClient {
 	}
 
 	async listSessions(scope: "cwd" | "all" = "all"): Promise<SessionSummary[]> {
-		const response = await this.transport.request({
-			type: "list_sessions",
+		const response = await this.typedRequest({
+			type: "list_sessions" as const,
 			scope,
 		});
 		if (!response.success) {
-			throw new Error(response.error ?? "list_sessions failed");
+			throw new Error(response.error);
 		}
-		const data = response.data as { sessions: SessionSummary[] };
-		return data.sessions;
+		return response.data.sessions;
 	}
 
 	async switchSession(sessionPath: string): Promise<void> {
-		const response = await this.transport.request({
-			type: "switch_session",
+		const response = await this.typedRequest({
+			type: "switch_session" as const,
 			sessionPath,
 		});
 		if (!response.success) {
-			throw new Error(response.error ?? "switch_session failed");
+			throw new Error(response.error);
 		}
 	}
 
 	async newSession(): Promise<void> {
-		const response = await this.transport.request({
-			type: "new_session",
-		});
+		const response = await this.typedRequest({ type: "new_session" as const });
 		if (!response.success) {
-			throw new Error(response.error ?? "new_session failed");
+			throw new Error(response.error);
 		}
 	}
 
 	async getMessages(): Promise<HistoryMessage[]> {
-		const response = await this.transport.request({
-			type: "get_messages",
-		});
+		const response = await this.typedRequest({ type: "get_messages" as const });
 		if (!response.success) {
-			throw new Error(response.error ?? "get_messages failed");
+			throw new Error(response.error);
 		}
-		const data = response.data as { messages: HistoryMessage[] };
-		return data.messages;
+		return response.data.messages;
 	}
 
 	async getState(): Promise<{ sessionId: string; sessionName?: string; thinkingLevel?: ThinkingLevel }> {
-		const response = await this.transport.request({
-			type: "get_state",
-		});
+		const response = await this.typedRequest({ type: "get_state" as const });
 		if (!response.success) {
-			throw new Error(response.error ?? "get_state failed");
+			throw new Error(response.error);
 		}
-		const data = response.data as { sessionId: string; sessionName?: string; thinkingLevel?: ThinkingLevel };
-		return data;
+		return response.data;
 	}
 
 	async setThinkingLevel(level: ThinkingLevel): Promise<void> {
-		const response = await this.transport.request({
-			type: "set_thinking_level",
+		const response = await this.typedRequest({
+			type: "set_thinking_level" as const,
 			level,
 		});
 		if (!response.success) {
-			throw new Error(response.error ?? "set_thinking_level failed");
+			throw new Error(response.error);
 		}
 	}
 
 	async getContextUsage(): Promise<ContextUsage | undefined> {
-		const response = await this.transport.request({
-			type: "get_context_usage",
-		});
+		const response = await this.typedRequest({ type: "get_context_usage" as const });
 		if (!response.success) {
-			throw new Error(response.error ?? "get_context_usage failed");
+			throw new Error(response.error);
 		}
-		const data = response.data as { usage?: ContextUsage };
-		return data.usage;
+		return response.data.usage;
 	}
 
 	async bash(command: string): Promise<BashResult> {
-		const response = await this.transport.request({
-			type: "bash",
+		const response = await this.typedRequest({
+			type: "bash" as const,
 			command,
 		});
 		if (!response.success) {
-			throw new Error(response.error ?? "bash command failed");
+			throw new Error(response.error);
 		}
-		return response.data as BashResult;
+		return response.data;
 	}
 
 	async abortBash(): Promise<void> {
-		const response = await this.transport.request({
-			type: "abort_bash",
-		});
+		const response = await this.typedRequest({ type: "abort_bash" as const });
 		if (!response.success) {
-			throw new Error(response.error ?? "abort_bash failed");
+			throw new Error(response.error);
 		}
 	}
 
