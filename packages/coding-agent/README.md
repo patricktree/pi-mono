@@ -521,8 +521,6 @@ Combine `--no-*` with explicit flags to load exactly what you need, ignoring set
 | `--verbose` | Force verbose startup |
 | `--host <host>` | Web mode bind host (default: `127.0.0.1`) |
 | `--port <port>` | Web mode port (default: `4781`) |
-| `--open` | Web mode: open browser automatically |
-| `--web-token <token>` | Web mode: require token for WebSocket auth |
 | `--serve-ui <path>` | Web mode: serve static frontend build from path |
 | `-h`, `--help` | Show help |
 | `-v`, `--version` | Show version |

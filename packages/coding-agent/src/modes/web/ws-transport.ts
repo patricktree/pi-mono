@@ -56,8 +56,6 @@ export interface WebSocketServer {
 // ============================================================================
 
 export interface CreateWebSocketServerOptions {
-	/** Optional token for authentication – if set, client must send `?token=<value>` query param */
-	token?: string;
 	/** Allowed origin(s) for CORS. Default: none (any origin accepted). */
 	allowedOrigins?: string[];
 }
@@ -89,18 +87,6 @@ export function createWebSocketServer(options?: CreateWebSocketServerOptions): W
 		handleUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer) {
 			const origin = req.headers.origin ?? "none";
 			const remoteAddr = (socket as { remoteAddress?: string }).remoteAddress ?? "unknown";
-
-			// Token auth
-			if (options?.token) {
-				const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
-				const clientToken = url.searchParams.get("token");
-				if (clientToken !== options.token) {
-					log(`rejected ${remoteAddr}: invalid token`);
-					socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
-					socket.end();
-					return;
-				}
-			}
 
 			// Origin check
 			if (options?.allowedOrigins && options.allowedOrigins.length > 0) {

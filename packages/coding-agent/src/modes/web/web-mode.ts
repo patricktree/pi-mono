@@ -6,9 +6,7 @@
  * session events are broadcast to all connected clients.
  */
 
-import { exec } from "node:child_process";
 import { existsSync } from "node:fs";
-import { platform } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
@@ -26,10 +24,6 @@ import { createWebSocketServer, type WebSocketClient } from "./ws-transport.js";
 export interface WebModeOptions {
 	host: string;
 	port: number;
-	/** Open browser automatically after starting */
-	open: boolean;
-	/** Optional auth token */
-	token?: string;
 	/** Extra allowed origins for WebSocket CORS (e.g. reverse proxy origins) */
 	allowedOrigins?: string[];
 	/** Path to custom static UI build directory */
@@ -63,15 +57,12 @@ interface Response {
  * Commands from the browser are handled via direct AgentSession SDK calls.
  */
 export async function runWebMode(session: AgentSession, options: WebModeOptions): Promise<never> {
-	const { host, port, open, token, allowedOrigins: extraAllowedOrigins, serveUiPath: explicitServeUiPath } = options;
+	const { host, port, allowedOrigins: extraAllowedOrigins, serveUiPath: explicitServeUiPath } = options;
 	const serveUiPath = resolveServeUiPath(explicitServeUiPath);
 
 	// Security warning for public binding
 	if (host === "0.0.0.0") {
 		console.warn("\x1b[33m⚠ WARNING: Binding to 0.0.0.0 exposes this server to all network interfaces.\x1b[0m");
-		if (!token) {
-			console.warn("\x1b[33m  Consider using --web-token to require authentication.\x1b[0m");
-		}
 	}
 
 	// Create WebSocket server
@@ -84,7 +75,6 @@ export async function runWebMode(session: AgentSession, options: WebModeOptions)
 	}
 
 	const wsServer = createWebSocketServer({
-		token,
 		allowedOrigins: allowedOrigins.length > 0 ? allowedOrigins : undefined,
 	});
 
@@ -188,32 +178,22 @@ export async function runWebMode(session: AgentSession, options: WebModeOptions)
 		port,
 		serveUiPath,
 		wsServer,
-		token,
 	});
 
 	const boundPort = await httpServer.listen();
 	const displayHost = host === "0.0.0.0" ? "localhost" : host;
 	const url = `http://${displayHost}:${boundPort}`;
-	const wsUrl = `ws://${displayHost}:${boundPort}/ws${token ? `?token=${token}` : ""}`;
-	const uiUrl = token ? `${url}/?token=${encodeURIComponent(token)}` : url;
+	const wsUrl = `ws://${displayHost}:${boundPort}/ws`;
 
 	console.log(`\x1b[1mpi web mode\x1b[0m`);
-	console.log(`  UI:        ${uiUrl}`);
+	console.log(`  UI:        ${url}`);
 	console.log(`  WebSocket: ${wsUrl}`);
 	if (serveUiPath) {
 		console.log(`  Static UI: ${serveUiPath}`);
 	} else {
 		console.log(`  Static UI: built-in fallback`);
 	}
-	if (token) {
-		console.log(`  Token:     ${token}`);
-	}
 	console.log();
-
-	// Open browser if requested
-	if (open) {
-		openBrowser(uiUrl);
-	}
 
 	// Keep process alive
 	return new Promise(() => {});
@@ -699,21 +679,4 @@ function resolveServeUiPath(explicitPath?: string): string | undefined {
 	}
 
 	return undefined;
-}
-
-function openBrowser(url: string): void {
-	const plat = platform();
-	let cmd: string;
-	if (plat === "darwin") {
-		cmd = `open "${url}"`;
-	} else if (plat === "win32") {
-		cmd = `start "" "${url}"`;
-	} else {
-		cmd = `xdg-open "${url}"`;
-	}
-	exec(cmd, (err) => {
-		if (err) {
-			console.warn(`Could not open browser: ${err.message}`);
-		}
-	});
 }

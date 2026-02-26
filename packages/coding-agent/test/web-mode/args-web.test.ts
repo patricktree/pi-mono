@@ -26,40 +26,16 @@ describe("parseArgs web mode flags", () => {
 		expect(result.webPort).toBeUndefined();
 	});
 
-	test("parses --open", () => {
-		const result = parseArgs(["--mode", "web", "--open"]);
-		expect(result.webOpen).toBe(true);
-	});
-
-	test("parses --web-token", () => {
-		const result = parseArgs(["--mode", "web", "--web-token", "secret123"]);
-		expect(result.webToken).toBe("secret123");
-	});
-
 	test("parses --serve-ui", () => {
 		const result = parseArgs(["--mode", "web", "--serve-ui", "/path/to/ui"]);
 		expect(result.serveUi).toBe("/path/to/ui");
 	});
 
 	test("all web flags together", () => {
-		const result = parseArgs([
-			"--mode",
-			"web",
-			"--host",
-			"0.0.0.0",
-			"--port",
-			"9000",
-			"--open",
-			"--web-token",
-			"tok",
-			"--serve-ui",
-			"./dist",
-		]);
+		const result = parseArgs(["--mode", "web", "--host", "0.0.0.0", "--port", "9000", "--serve-ui", "./dist"]);
 		expect(result.mode).toBe("web");
 		expect(result.webHost).toBe("0.0.0.0");
 		expect(result.webPort).toBe(9000);
-		expect(result.webOpen).toBe(true);
-		expect(result.webToken).toBe("tok");
 		expect(result.serveUi).toBe("./dist");
 	});
 
@@ -67,8 +43,6 @@ describe("parseArgs web mode flags", () => {
 		const result = parseArgs([]);
 		expect(result.webHost).toBeUndefined();
 		expect(result.webPort).toBeUndefined();
-		expect(result.webOpen).toBeUndefined();
-		expect(result.webToken).toBeUndefined();
 		expect(result.serveUi).toBeUndefined();
 	});
 

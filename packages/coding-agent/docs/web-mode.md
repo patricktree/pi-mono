@@ -19,11 +19,9 @@ pi --mode web [options]
 
 | Option | Default | Description |
 | --- | --- | --- |
-| `--web-host <host>` | `127.0.0.1` | Bind address |
-| `--web-port <port>` | `4781` | Listen port |
-| `--web-open` | off | Open browser automatically |
-| `--web-token <token>` | none | Require token authentication |
-| `--web-allowed-origins <origins>` | auto | Extra allowed origins for WebSocket CORS |
+| `--host <host>` | `127.0.0.1` | Bind address |
+| `--port <port>` | `4781` | Listen port |
+| `--web-allowed-origin <origin>` | auto | Extra allowed origins for WebSocket CORS (repeatable) |
 | `--serve-ui <path>` | auto-detected | Path to static UI build directory |
 
 ## Server Architecture
@@ -91,10 +89,6 @@ Unknown extensions are served as `application/octet-stream`.
 ## WebSocket Server
 
 `createWebSocketServer()` wraps the `ws` library in a higher-level API with per-client abstraction, authentication, and origin checking.
-
-### Authentication
-
-If a token is configured (`--web-token`), the server validates the `?token=` query parameter on WebSocket upgrade requests. Invalid tokens receive a `401 Unauthorized` response and the connection is rejected before the WebSocket handshake completes.
 
 ### Origin Checking
 
@@ -211,7 +205,6 @@ Some `ExtensionUIContext` methods are not supported in web/protocol mode:
 
 ## Security Considerations
 
-- **Token auth**: Use `--web-token` to require authentication. Without it, anyone who can reach the server can control the agent.
 - **Bind address**: The default `127.0.0.1` only accepts local connections. Binding to `0.0.0.0` exposes the server to the network — the server prints a warning.
 - **Origin checking**: Prevents cross-site WebSocket hijacking when bound to localhost.
 - **Path traversal**: Static file serving resolves and validates paths to prevent directory traversal attacks.

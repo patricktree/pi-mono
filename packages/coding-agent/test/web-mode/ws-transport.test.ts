@@ -228,38 +228,6 @@ describe("WebSocket transport", () => {
 		socket.destroy();
 	});
 
-	test("token auth: rejects without token", async () => {
-		const port = await getPort();
-		const wss = createWebSocketServer({ token: "secret" });
-		const server = createTestServer(wss);
-		servers.push(server);
-		await listen(server, port);
-
-		await expect(connectClient(port)).rejects.toThrow();
-	});
-
-	test("token auth: accepts with correct token", async () => {
-		const port = await getPort();
-		const wss = createWebSocketServer({ token: "secret" });
-		const server = createTestServer(wss);
-		servers.push(server);
-		await listen(server, port);
-
-		const ws = await connectClient(port, "/?token=secret");
-		wsClients.push(ws);
-		expect(wss.clientCount()).toBe(1);
-	});
-
-	test("token auth: rejects with wrong token", async () => {
-		const port = await getPort();
-		const wss = createWebSocketServer({ token: "secret" });
-		const server = createTestServer(wss);
-		servers.push(server);
-		await listen(server, port);
-
-		await expect(connectClient(port, "/?token=wrong")).rejects.toThrow();
-	});
-
 	test("origin check: rejects disallowed origin", async () => {
 		const port = await getPort();
 		const wss = createWebSocketServer({ allowedOrigins: ["http://localhost:3000"] });

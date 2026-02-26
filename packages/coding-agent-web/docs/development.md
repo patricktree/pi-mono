@@ -67,12 +67,6 @@ npm run build
 pi --mode web --serve-ui packages/coding-agent-web/dist
 ```
 
-If web mode was started with `--web-token`, include it in the URL:
-
-```text
-http://127.0.0.1:4781/?token=<token>
-```
-
 ## Type Checking and Linting
 
 ```bash

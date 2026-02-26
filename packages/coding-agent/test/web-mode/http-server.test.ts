@@ -34,17 +34,13 @@ function makeTempDir(): string {
 	return dir;
 }
 
-async function startServer(opts?: {
-	serveUiPath?: string;
-	token?: string;
-}): Promise<{ port: number; handle: HttpServerHandle }> {
-	const ws = createWebSocketServer({ token: opts?.token });
+async function startServer(opts?: { serveUiPath?: string }): Promise<{ port: number; handle: HttpServerHandle }> {
+	const ws = createWebSocketServer();
 	const handle = createHttpServer({
 		host: "127.0.0.1",
 		port: 0, // random available port
 		wsServer: ws,
 		serveUiPath: opts?.serveUiPath,
-		token: opts?.token,
 	});
 	handles.push(handle);
 	const port = await handle.listen();
@@ -80,13 +76,6 @@ describe("HTTP server", () => {
 		expect(headers.get("content-type")).toContain("text/html");
 		expect(body).toContain("<title>pi web mode</title>");
 		expect(body).toContain("WebSocket");
-	});
-
-	test("fallback HTML includes token in WS URL when provided", async () => {
-		const { port } = await startServer({ token: "mytoken" });
-		const { body } = await fetchText(`http://127.0.0.1:${port}/`);
-
-		expect(body).toContain("token=mytoken");
 	});
 
 	test("unknown path returns 404 when no static root", async () => {

@@ -32,8 +32,6 @@ export interface HttpServerOptions {
 	serveUiPath?: string;
 	/** WebSocket server to delegate upgrades to */
 	wsServer: WebSocketServer;
-	/** Optional auth token – validated by wsServer, but also checked for /health */
-	token?: string;
 }
 
 // ============================================================================
@@ -62,9 +60,9 @@ const MIME_TYPES: Record<string, string> = {
 // Built-in fallback HTML (shown when no --serve-ui is provided)
 // ============================================================================
 
-function getFallbackHtml(host: string, port: number, token?: string): string {
-	const wsUrl = `ws://${host === "0.0.0.0" ? "localhost" : host}:${port}/ws${token ? `?token=${token}` : ""}`;
-	const uiUrl = `http://${host === "0.0.0.0" ? "localhost" : host}:${port}${token ? `/?token=${encodeURIComponent(token)}` : ""}`;
+function getFallbackHtml(host: string, port: number): string {
+	const wsUrl = `ws://${host === "0.0.0.0" ? "localhost" : host}:${port}/ws`;
+	const uiUrl = `http://${host === "0.0.0.0" ? "localhost" : host}:${port}`;
 
 	return `<!DOCTYPE html>
 <html lang="en">
@@ -157,7 +155,7 @@ export interface HttpServerHandle {
 }
 
 export function createHttpServer(options: HttpServerOptions): HttpServerHandle {
-	const { host, port, serveUiPath, wsServer, token } = options;
+	const { host, port, serveUiPath, wsServer } = options;
 	const staticRoot = serveUiPath ? resolve(serveUiPath) : undefined;
 
 	const server = http.createServer((req, res) => {
@@ -182,7 +180,7 @@ export function createHttpServer(options: HttpServerOptions): HttpServerHandle {
 		// Fallback HTML
 		if (pathname === "/" || pathname === "/index.html") {
 			log(`${req.method} ${pathname} -> 200 fallback HTML`);
-			const html = getFallbackHtml(host, port, token);
+			const html = getFallbackHtml(host, port);
 			res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
 			res.end(html);
 			return;

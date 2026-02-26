@@ -76,10 +76,8 @@ export function getWebSocketUrl(): string {
 		return wsOverride;
 	}
 
-	const token = params.get("token");
 	const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-	const tokenSuffix = token ? `?token=${encodeURIComponent(token)}` : "";
-	return `${wsProtocol}//${window.location.host}/ws${tokenSuffix}`;
+	return `${wsProtocol}//${window.location.host}/ws`;
 }
 
 /** Read session ID from the URL query parameter. */

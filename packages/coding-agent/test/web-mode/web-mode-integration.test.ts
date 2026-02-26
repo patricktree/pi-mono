@@ -287,40 +287,6 @@ describe("Web mode integration", () => {
 		expect(response.data).toHaveProperty("usage");
 	});
 
-	test("token auth: rejects unauthenticated WebSocket", async () => {
-		const port = await getPort();
-		const wsServer = createWebSocketServer({ token: "secret" });
-		const core = createProtocolServerCore({ session, output: (obj) => wsServer.broadcast(obj) });
-		await core.bind();
-
-		httpHandle = createHttpServer({ host: "127.0.0.1", port, wsServer, token: "secret" });
-		await httpHandle.listen();
-
-		// Should fail without token
-		await expect(connectWs(port)).rejects.toThrow();
-	});
-
-	test("token auth: accepts authenticated WebSocket", async () => {
-		const port = await getPort();
-		const wsServer = createWebSocketServer({ token: "secret" });
-		const core = createProtocolServerCore({ session, output: (obj) => wsServer.broadcast(obj) });
-		await core.bind();
-
-		wsServer.onMessage(async (client, data) => {
-			const resp = await core.handleCommand(data as any);
-			client.send(resp);
-		});
-
-		httpHandle = createHttpServer({ host: "127.0.0.1", port, wsServer, token: "secret" });
-		await httpHandle.listen();
-
-		const ws = await connectWs(port, "/ws?token=secret");
-		wsClients.push(ws);
-
-		const response = await sendAndReceive(ws, { id: "r8", type: "get_state" });
-		expect(response.success).toBe(true);
-	});
-
 	test("health endpoint works alongside WebSocket", async () => {
 		const port = await getPort();
 		const wsServer = createWebSocketServer();

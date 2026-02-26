@@ -42,8 +42,6 @@ export interface Args {
 	// Web mode options
 	webHost?: string;
 	webPort?: number;
-	webOpen?: boolean;
-	webToken?: string;
 	webAllowedOrigins?: string[];
 	serveUi?: string;
 	messages: string[];
@@ -163,10 +161,6 @@ export function parseArgs(args: string[], extensionFlags?: Map<string, { type: "
 		} else if (arg === "--port" && i + 1 < args.length) {
 			const p = Number.parseInt(args[++i], 10);
 			if (!Number.isNaN(p)) result.webPort = p;
-		} else if (arg === "--open") {
-			result.webOpen = true;
-		} else if (arg === "--web-token" && i + 1 < args.length) {
-			result.webToken = args[++i];
 		} else if (arg === "--web-allowed-origin" && i + 1 < args.length) {
 			result.webAllowedOrigins = result.webAllowedOrigins ?? [];
 			result.webAllowedOrigins.push(args[++i]);
@@ -240,8 +234,6 @@ ${chalk.bold("Options:")}
   --verbose                      Force verbose startup (overrides quietStartup setting)
   --host <host>                  Web mode: bind address (default: 127.0.0.1)
   --port <port>                  Web mode: listen port (default: 4781)
-  --open                         Web mode: open browser automatically
-  --web-token <token>            Web mode: require auth token for WebSocket
   --web-allowed-origin <origin>  Web mode: add allowed origin (can be used multiple times)
   --serve-ui <path>              Web mode: serve custom static UI build
   --help, -h                     Show this help
