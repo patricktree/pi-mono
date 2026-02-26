@@ -8,8 +8,11 @@
     "dev:mock": "vite --open /?mock=default",
     "build": "vite build",
     "preview": "vite preview",
-    "check": "biome check --write --error-on-warnings . && tsc --noEmit",
-    "clean": "rm -rf dist"
+    "check": "biome check --write --error-on-warnings . && tsc --noEmit && tsc -p tsconfig.tests.json --noEmit",
+    "clean": "rm -rf dist",
+    "test:e2e": "docker pull mcr.microsoft.com/playwright:v1.58.2-noble && vite build && npx playwright test",
+    "test:e2e:update": "docker pull mcr.microsoft.com/playwright:v1.58.2-noble && vite build && npx playwright test --update-snapshots",
+    "test:e2e:ui": "PWDEBUG=1 vite build && npx playwright test --ui"
   },
   "dependencies": {
     "@linaria/core": "^7.0.0",
@@ -23,6 +26,7 @@
     "zustand": "^5.0.8"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react-swc": "^4.2.3",

@@ -297,6 +297,7 @@ export function PromptInput({
 							className={squareBtn}
 							onClick={onAbort}
 							type="button"
+							aria-label="Stop"
 						>
 							<Square size={14} />
 						</button>

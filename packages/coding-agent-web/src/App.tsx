@@ -15,6 +15,7 @@ import { ProtocolClient } from "./protocol/client.js";
 import type { ExtensionUiRequestEvent, MessageStartEvent, SessionSummary, ThinkingLevel } from "./protocol/types.js";
 import { MessageController, type UiMessage, useAppStore } from "./state/store.js";
 import { globalStyles } from "./styles/globalStyles.js";
+import { TestTransport } from "./transport/test-transport.js";
 import type { Transport } from "./transport/transport.js";
 import { WsClient } from "./transport/ws-client.js";
 import {
@@ -371,11 +372,39 @@ export function App() {
 	useEffect(() => {
 		const params = new URLSearchParams(window.location.search);
 		const mockParam = params.get("mock");
+		const testMode = params.has("test");
 		let mockAutoPrompt: string | undefined;
 		let mockAutoSteeringPrompt: string | undefined;
 
 		let transport: Transport;
-		if (mockParam !== null) {
+		if (testMode) {
+			const testTransport = new TestTransport();
+			transport = testTransport;
+			window.__piTestApi = {
+				setHandler(commandType, response) {
+					testTransport.handleRequest(commandType, (cmd) => ({
+						...response,
+						id: cmd.id,
+					}));
+				},
+				removeHandler(commandType) {
+					testTransport.removeHandler(commandType);
+				},
+				emitEvent(event) {
+					testTransport.emitEvent(event);
+				},
+				emitEvents(events) {
+					testTransport.emitEvents(events);
+				},
+				connect() {
+					testTransport.connect();
+				},
+				disconnect() {
+					testTransport.disconnect();
+				},
+			};
+			log("test mode: transport API exposed on window.__piTestApi");
+		} else if (mockParam !== null) {
 			const scenarioName = mockParam || "default";
 			const scenario = SCENARIOS[scenarioName] ?? SCENARIOS.default;
 			log(`mock mode (scenario: ${scenarioName})`);
@@ -446,7 +475,9 @@ export function App() {
 			mockAutoSteeringPrompt = undefined;
 		});
 
-		transport.connect();
+		if (!testMode) {
+			transport.connect();
+		}
 		log("client initialized");
 
 		return () => {
@@ -455,6 +486,7 @@ export function App() {
 			transport.disconnect();
 			transportRef.current = undefined;
 			protocolRef.current = undefined;
+			window.__piTestApi = undefined;
 		};
 	}, [
 		appendMessage,

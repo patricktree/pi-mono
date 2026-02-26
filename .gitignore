@@ -3,6 +3,11 @@ dist/
 *.log
 .DS_Store
 *.tsbuildinfo
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
 # packages/*/node_modules/
 packages/*/dist/
 packages/*/dist-chrome/
