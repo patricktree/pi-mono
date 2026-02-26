@@ -59,21 +59,6 @@ export const globalStyles = css`
 			--font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 		}
 
-		@keyframes oc-spinner {
-			from { transform: rotate(0deg); }
-			to { transform: rotate(360deg); }
-		}
-
-		@keyframes oc-pulse {
-			0%, 100% { opacity: 1; }
-			50% { opacity: 0.3; }
-		}
-
-		@keyframes spin {
-			from { transform: rotate(0deg); }
-			to { transform: rotate(360deg); }
-		}
-
 		/* -------------------------------------------------------------- */
 		/* Base                                                            */
 		/* -------------------------------------------------------------- */
