@@ -5,6 +5,9 @@
  * by both the stdio-based RPC transport and the WebSocket-based web transport.
  */
 
+import { existsSync, readdirSync, statSync } from "node:fs";
+import { homedir } from "node:os";
+import { resolve } from "node:path";
 import type { AgentSession } from "../../core/agent-session.js";
 import { SessionManager } from "../../core/session-manager.js";
 import { createExtensionUIBridge, type ExtensionUIBridge } from "./extension-ui-bridge.js";
@@ -224,8 +227,14 @@ export function createProtocolServerCore(opts: ProtocolServerCoreOptions): Proto
 			}
 
 			case "new_session": {
-				const options = command.parentSession ? { parentSession: command.parentSession } : undefined;
-				const cancelled = !(await session.newSession(options));
+				const options: { parentSession?: string; cwd?: string } = {};
+				if (command.parentSession) {
+					options.parentSession = command.parentSession;
+				}
+				if (command.cwd) {
+					options.cwd = command.cwd;
+				}
+				const cancelled = !(await session.newSession(Object.keys(options).length > 0 ? options : undefined));
 				if (!cancelled) {
 					emitSessionChanged("new");
 				}
@@ -485,6 +494,44 @@ export function createProtocolServerCore(opts: ProtocolServerCoreOptions): Proto
 				return success(id, "set_active_tools", {
 					activeToolNames: session.getActiveToolNames(),
 				});
+			}
+
+			// ==== Filesystem browsing ====
+
+			case "list_directory": {
+				try {
+					let requestedPath = command.path || homedir();
+					if (requestedPath === "~" || requestedPath.startsWith("~/")) {
+						requestedPath = requestedPath.replace(/^~/, homedir());
+					}
+					const absolutePath = resolve(requestedPath);
+
+					if (!existsSync(absolutePath)) {
+						return error(id, "list_directory", `Path does not exist: ${absolutePath}`);
+					}
+
+					const stat = statSync(absolutePath);
+					if (!stat.isDirectory()) {
+						return error(id, "list_directory", `Path is not a directory: ${absolutePath}`);
+					}
+
+					const dirEntries = readdirSync(absolutePath, { withFileTypes: true });
+					const entries = dirEntries
+						.filter((entry) => {
+							// Skip hidden files/directories (starting with .)
+							if (entry.name.startsWith(".")) return false;
+							return entry.isDirectory();
+						})
+						.sort((a, b) => a.name.localeCompare(b.name))
+						.map((entry) => ({
+							name: entry.name,
+							isDirectory: entry.isDirectory(),
+						}));
+
+					return success(id, "list_directory", { absolutePath, entries });
+				} catch (fsError) {
+					return error(id, "list_directory", (fsError as Error).message);
+				}
 			}
 
 			default: {

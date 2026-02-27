@@ -165,6 +165,28 @@ export function createScenarioTransport(
 		};
 	});
 
+	// -- list_directory -------------------------------------------------------
+
+	transport.handleRequest("list_directory", (cmd) => {
+		const requestedPath = (cmd as { path?: string }).path || "/Users/user";
+		logger.log("[mock] list_directory:", requestedPath);
+		return {
+			type: "response",
+			id: cmd.id,
+			command: "list_directory",
+			success: true,
+			data: {
+				absolutePath: requestedPath === "~" ? "/Users/user" : requestedPath,
+				entries: [
+					{ name: "workspace", isDirectory: true },
+					{ name: "Documents", isDirectory: true },
+					{ name: "Downloads", isDirectory: true },
+					{ name: "Desktop", isDirectory: true },
+				],
+			},
+		};
+	});
+
 	// -- prompt ---------------------------------------------------------------
 
 	transport.handleRequest("prompt", (cmd) => {

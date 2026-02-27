@@ -37,6 +37,8 @@ export interface SessionHeader {
 
 export interface NewSessionOptions {
 	parentSession?: string;
+	/** If provided, changes the working directory for the new session. */
+	cwd?: string;
 }
 
 export interface SessionEntryBase {
@@ -721,6 +723,14 @@ export class SessionManager {
 	}
 
 	newSession(options?: NewSessionOptions): string | undefined {
+		// If a new cwd is provided, update the cwd and session directory
+		if (options?.cwd) {
+			this.cwd = options.cwd;
+			if (this.persist) {
+				this.sessionDir = getDefaultSessionDir(options.cwd);
+			}
+		}
+
 		this.sessionId = randomUUID();
 		const timestamp = new Date().toISOString();
 		const header: SessionHeader = {

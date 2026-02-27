@@ -6,7 +6,8 @@
  * session events are broadcast to all connected clients.
  */
 
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
@@ -246,8 +247,14 @@ async function handleCommand(
 			}
 
 			case "new_session": {
-				const opts = command.parentSession ? { parentSession: command.parentSession as string } : undefined;
-				const cancelled = !(await session.newSession(opts));
+				const opts: { parentSession?: string; cwd?: string } = {};
+				if (command.parentSession) {
+					opts.parentSession = command.parentSession as string;
+				}
+				if (command.cwd) {
+					opts.cwd = command.cwd as string;
+				}
+				const cancelled = !(await session.newSession(Object.keys(opts).length > 0 ? opts : undefined));
 				if (!cancelled) emitSessionChanged(session, broadcast, "new");
 				return successResponse(id, "new_session", { cancelled });
 			}
@@ -494,6 +501,39 @@ async function handleCommand(
 				return successResponse(id, "set_active_tools", {
 					activeToolNames: session.getActiveToolNames(),
 				});
+			}
+
+			// ==== Filesystem browsing ====
+
+			case "list_directory": {
+				let requestedPath = (command.path as string) || homedir();
+				if (requestedPath === "~" || requestedPath.startsWith("~/")) {
+					requestedPath = requestedPath.replace(/^~/, homedir());
+				}
+				const absolutePath = resolve(requestedPath);
+
+				if (!existsSync(absolutePath)) {
+					return errorResponse(id, "list_directory", `Path does not exist: ${absolutePath}`);
+				}
+
+				const stat = statSync(absolutePath);
+				if (!stat.isDirectory()) {
+					return errorResponse(id, "list_directory", `Path is not a directory: ${absolutePath}`);
+				}
+
+				const dirEntries = readdirSync(absolutePath, { withFileTypes: true });
+				const entries = dirEntries
+					.filter((entry) => {
+						if (entry.name.startsWith(".")) return false;
+						return entry.isDirectory();
+					})
+					.sort((a, b) => a.name.localeCompare(b.name))
+					.map((entry) => ({
+						name: entry.name,
+						isDirectory: entry.isDirectory(),
+					}));
+
+				return successResponse(id, "list_directory", { absolutePath, entries });
 			}
 
 			default: {

@@ -21,7 +21,7 @@ export type RpcCommand =
 	| { id?: string; type: "steer"; message: string; images?: ImageContent[] }
 	| { id?: string; type: "follow_up"; message: string; images?: ImageContent[] }
 	| { id?: string; type: "abort" }
-	| { id?: string; type: "new_session"; parentSession?: string }
+	| { id?: string; type: "new_session"; parentSession?: string; cwd?: string }
 
 	// State
 	| { id?: string; type: "get_state" }
@@ -84,7 +84,10 @@ export type RpcCommand =
 	| { id?: string; type: "reload_resources" }
 	| { id?: string; type: "get_context_usage" }
 	| { id?: string; type: "get_tools" }
-	| { id?: string; type: "set_active_tools"; toolNames: string[] };
+	| { id?: string; type: "set_active_tools"; toolNames: string[] }
+
+	// Filesystem browsing
+	| { id?: string; type: "list_directory"; path: string };
 
 // ============================================================================
 // RPC Slash Command (for get_commands response)
@@ -153,6 +156,11 @@ export interface RpcToolInfo {
 	name: string;
 	description: string;
 	parameters: unknown;
+}
+
+export interface RpcDirectoryEntry {
+	name: string;
+	isDirectory: boolean;
 }
 
 // ============================================================================
@@ -324,6 +332,15 @@ export type RpcResponse =
 			command: "set_active_tools";
 			success: true;
 			data: { activeToolNames: string[] };
+	  }
+
+	// Filesystem browsing
+	| {
+			id?: string;
+			type: "response";
+			command: "list_directory";
+			success: true;
+			data: { absolutePath: string; entries: RpcDirectoryEntry[] };
 	  }
 
 	// Error response (any command can fail)

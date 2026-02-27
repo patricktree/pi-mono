@@ -1134,6 +1134,7 @@ export class AgentSession {
 	 */
 	async newSession(options?: {
 		parentSession?: string;
+		cwd?: string;
 		setup?: (sessionManager: SessionManager) => Promise<void>;
 	}): Promise<boolean> {
 		const previousSessionFile = this.sessionFile;
@@ -1153,7 +1154,12 @@ export class AgentSession {
 		this._disconnectFromAgent();
 		await this.abort();
 		this.agent.reset();
-		this.sessionManager.newSession({ parentSession: options?.parentSession });
+		this.sessionManager.newSession({ parentSession: options?.parentSession, cwd: options?.cwd });
+
+		// If cwd changed, update the internal cwd used for tools
+		if (options?.cwd) {
+			this._cwd = options.cwd;
+		}
 		this.agent.sessionId = this.sessionManager.getSessionId();
 		this._steeringMessages = [];
 		this._followUpMessages = [];
@@ -1167,6 +1173,14 @@ export class AgentSession {
 			// Sync agent state with session manager after setup
 			const sessionContext = this.sessionManager.buildSessionContext();
 			this.agent.replaceMessages(sessionContext.messages);
+		}
+
+		// Rebuild tools if CWD changed so they use the new working directory
+		if (options?.cwd) {
+			this._buildRuntime({
+				activeToolNames: this._initialActiveToolNames,
+				includeAllExtensionTools: true,
+			});
 		}
 
 		this._reconnectToAgent();

@@ -1,8 +1,9 @@
 import { css, cx } from "@linaria/core";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { BottomToolbar } from "./components/BottomToolbar.js";
+import { DirectoryPicker } from "./components/DirectoryPicker.js";
 import { Header } from "./components/Header.js";
 import { MessageList } from "./components/MessageList.js";
 import { PromptInput } from "./components/PromptInput.js";
@@ -79,6 +80,7 @@ export function App() {
 	const protocolRef = useRef<ProtocolClient | undefined>(undefined);
 	const messageControllerRef = useRef(new MessageController());
 	const activeSessionIdRef = useRef<string | null>(null);
+	const [directoryPickerOpen, setDirectoryPickerOpen] = useState(false);
 
 	const {
 		connected,
@@ -563,22 +565,35 @@ export function App() {
 		}
 	}, [appendErrorMessage, connected]);
 
-	const onNewSession = useCallback(async () => {
+	const onNewSession = useCallback(() => {
+		setSidebarOpen(false);
+		setDirectoryPickerOpen(true);
+	}, [setSidebarOpen]);
+
+	const onNewSessionConfirm = useCallback(async (cwd: string) => {
 		const protocolClient = protocolRef.current;
 		if (!protocolClient) {
 			return;
 		}
 
-		setSidebarOpen(false);
+		setDirectoryPickerOpen(false);
 		try {
-			await protocolClient.newSession();
+			await protocolClient.newSession(cwd);
 			resetSessionUiState();
 			await invalidateSessionQueries();
 		} catch (sessionError) {
 			const messageText = sessionError instanceof Error ? sessionError.message : String(sessionError);
 			appendErrorMessage(`Failed to create session: ${messageText}`);
 		}
-	}, [appendErrorMessage, invalidateSessionQueries, resetSessionUiState, setSidebarOpen]);
+	}, [appendErrorMessage, invalidateSessionQueries, resetSessionUiState]);
+
+	const listDirectory = useCallback(async (path: string) => {
+		const protocolClient = protocolRef.current;
+		if (!protocolClient) {
+			throw new Error("Not connected");
+		}
+		return protocolClient.listDirectory(path);
+	}, []);
 
 	const sessions = useMemo(() => sortSessions(sessionsQuery.data ?? []), [sessionsQuery.data]);
 
@@ -657,9 +672,7 @@ export function App() {
 				currentSessionId={currentSessionId}
 				currentCwd={currentSession?.cwd}
 				onClose={() => setSidebarOpen(false)}
-				onNewSession={() => {
-					void onNewSession();
-				}}
+				onNewSession={onNewSession}
 				onSwitchSession={(session) => {
 					void onSwitchSession(session);
 				}}
@@ -720,6 +733,17 @@ export function App() {
 					}}
 				/>
 			</footer>
+
+			{directoryPickerOpen && (
+				<DirectoryPicker
+					initialPath={currentSession?.cwd ?? "~"}
+					onSelect={(path) => {
+						void onNewSessionConfirm(path);
+					}}
+					onCancel={() => setDirectoryPickerOpen(false)}
+					listDirectory={listDirectory}
+				/>
+			)}
 		</div>
 	);
 }

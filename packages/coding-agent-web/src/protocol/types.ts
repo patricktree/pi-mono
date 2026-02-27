@@ -93,6 +93,11 @@ export type AssistantMessageEvent =
 // Commands that carry no data map to `undefined`.
 // ---------------------------------------------------------------------------
 
+export interface DirectoryEntry {
+	name: string;
+	isDirectory: boolean;
+}
+
 export interface RpcResponseDataMap {
 	prompt: undefined;
 	abort: undefined;
@@ -106,6 +111,7 @@ export interface RpcResponseDataMap {
 	get_context_usage: { usage?: ContextUsage };
 	bash: BashResult;
 	abort_bash: undefined;
+	list_directory: { absolutePath: string; entries: DirectoryEntry[] };
 }
 
 /** Per-command success variants: includes `data` only for commands that carry data. */
@@ -262,6 +268,7 @@ export interface SwitchSessionCommand {
 export interface NewSessionCommand {
 	id?: string;
 	type: "new_session";
+	cwd?: string;
 }
 
 export interface GetStateCommand {
@@ -296,6 +303,12 @@ export interface AbortBashCommand {
 	type: "abort_bash";
 }
 
+export interface ListDirectoryCommand {
+	id?: string;
+	type: "list_directory";
+	path: string;
+}
+
 export interface BashResult {
 	output: string;
 	exitCode: number | undefined;
@@ -316,7 +329,8 @@ export type ClientCommand =
 	| GetContextUsageCommand
 	| SetThinkingLevelCommand
 	| BashCommand
-	| AbortBashCommand;
+	| AbortBashCommand
+	| ListDirectoryCommand;
 
 export type ExtensionUiResponse =
 	| { type: "extension_ui_response"; id: string; cancelled: true }

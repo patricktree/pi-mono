@@ -3,6 +3,7 @@ import type {
 	BashResult,
 	ClientCommand,
 	ContextUsage,
+	DirectoryEntry,
 	ExtensionUiResponse,
 	HistoryMessage,
 	ImageContent,
@@ -73,11 +74,25 @@ export class ProtocolClient {
 		}
 	}
 
-	async newSession(): Promise<void> {
-		const response = await this.typedRequest({ type: "new_session" as const });
+	async newSession(cwd?: string): Promise<void> {
+		const response = await this.typedRequest({
+			type: "new_session" as const,
+			...(cwd ? { cwd } : {}),
+		});
 		if (!response.success) {
 			throw new Error(response.error);
 		}
+	}
+
+	async listDirectory(path: string): Promise<{ absolutePath: string; entries: DirectoryEntry[] }> {
+		const response = await this.typedRequest({
+			type: "list_directory" as const,
+			path,
+		});
+		if (!response.success) {
+			throw new Error(response.error);
+		}
+		return response.data;
 	}
 
 	async getMessages(): Promise<HistoryMessage[]> {
