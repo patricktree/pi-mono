@@ -3,6 +3,11 @@
  *
  * Starts the full HTTP + WS server and tests the protocol round-trip
  * through a real WebSocket connection using the `ws` library.
+ *
+ * Wires up the transport components (http-server, ws-transport) with a simple
+ * inline command handler that mirrors how web-mode.ts dispatches commands to
+ * AgentSession, exercising the real transport stack without the dead
+ * server-core abstraction.
  */
 
 import { existsSync, mkdirSync, rmSync } from "node:fs";
@@ -19,9 +24,8 @@ import { ModelRegistry } from "../../src/core/model-registry.js";
 import { SessionManager } from "../../src/core/session-manager.js";
 import { SettingsManager } from "../../src/core/settings-manager.js";
 import { codingTools } from "../../src/core/tools/index.js";
-import { createProtocolServerCore } from "../../src/modes/protocol/server-core.js";
 import { createHttpServer, type HttpServerHandle } from "../../src/modes/web/http-server.js";
-import { createWebSocketServer } from "../../src/modes/web/ws-transport.js";
+import { createWebSocketServer, type WebSocketClient } from "../../src/modes/web/ws-transport.js";
 import { createTestResourceLoader } from "../utilities.js";
 
 // ============================================================================
@@ -73,6 +77,101 @@ function collectMessages(ws: WebSocket, timeoutMs = 300): Promise<Record<string,
 }
 
 // ============================================================================
+// Inline command handler (mirrors web-mode.ts dispatch)
+// ============================================================================
+
+interface CommandResponse {
+	id?: string;
+	type: "response";
+	command: string;
+	success: boolean;
+	data?: unknown;
+	error?: string;
+}
+
+/**
+ * Minimal command handler that dispatches to AgentSession methods, matching
+ * the same pattern as the production web-mode.ts handleCommand().
+ */
+async function handleCommand(
+	session: AgentSession,
+	command: Record<string, unknown>,
+	broadcast: (obj: object) => void,
+): Promise<CommandResponse> {
+	const id = command.id as string | undefined;
+	const type = command.type as string;
+
+	try {
+		switch (type) {
+			case "get_state":
+				return {
+					id,
+					type: "response",
+					command: type,
+					success: true,
+					data: {
+						model: session.model,
+						thinkingLevel: session.thinkingLevel,
+						isStreaming: session.isStreaming,
+						isCompacting: session.isCompacting,
+						sessionId: session.sessionId,
+						sessionFile: session.sessionFile,
+						sessionName: session.sessionName,
+						autoCompactionEnabled: session.autoCompactionEnabled,
+						messageCount: session.messages.length,
+						pendingMessageCount: session.pendingMessageCount,
+					},
+				};
+
+			case "set_thinking_level":
+				session.setThinkingLevel(command.level as "off" | "minimal" | "low" | "medium" | "high" | "xhigh");
+				return { id, type: "response", command: type, success: true };
+
+			case "get_tools": {
+				const activeToolNames = session.getActiveToolNames();
+				const allTools = session.getAllTools().map((t) => ({
+					name: t.name,
+					description: t.description,
+					parameters: t.parameters,
+				}));
+				return { id, type: "response", command: type, success: true, data: { activeToolNames, allTools } };
+			}
+
+			case "get_context_usage": {
+				const usage = session.getContextUsage();
+				return { id, type: "response", command: type, success: true, data: { usage } };
+			}
+
+			case "get_session_tree": {
+				const roots = session.sessionManager.getTree();
+				return {
+					id,
+					type: "response",
+					command: type,
+					success: true,
+					data: { leafId: session.sessionManager.getLeafId(), nodes: roots },
+				};
+			}
+
+			case "reload_resources":
+				await session.reload();
+				broadcast({
+					type: "session_changed",
+					reason: "reload",
+					sessionId: session.sessionId,
+					messageCount: session.messages.length,
+				});
+				return { id, type: "response", command: type, success: true, data: { commands: [] } };
+
+			default:
+				return { id, type: "response", command: type, success: false, error: `Unknown command: ${type}` };
+		}
+	} catch (err) {
+		return { id, type: "response", command: type, success: false, error: (err as Error).message };
+	}
+}
+
+// ============================================================================
 // Setup
 // ============================================================================
 
@@ -111,27 +210,30 @@ afterEach(async () => {
 });
 
 // ============================================================================
+// Wiring helper — creates HTTP+WS server with inline command handler
+// ============================================================================
+
+async function createStack(port: number) {
+	const wsServer = createWebSocketServer();
+	const broadcast = (obj: object) => wsServer.broadcast(obj);
+
+	wsServer.onMessage(async (client: WebSocketClient, data: unknown) => {
+		const resp = await handleCommand(session, data as Record<string, unknown>, broadcast);
+		client.send(resp);
+	});
+
+	httpHandle = createHttpServer({ host: "127.0.0.1", port, wsServer });
+	await httpHandle.listen();
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
 describe("Web mode integration", () => {
 	test("full round-trip: get_state over WebSocket", async () => {
 		const port = await getPort();
-		const wsServer = createWebSocketServer();
-		const core = createProtocolServerCore({ session, output: (obj) => wsServer.broadcast(obj) });
-		await core.bind();
-
-		wsServer.onMessage(async (client, data) => {
-			if (data && typeof data === "object" && (data as Record<string, unknown>).type === "extension_ui_response") {
-				core.handleExtensionUIResponse(data as any);
-				return;
-			}
-			const resp = await core.handleCommand(data as any);
-			client.send(resp);
-		});
-
-		httpHandle = createHttpServer({ host: "127.0.0.1", port, wsServer });
-		await httpHandle.listen();
+		await createStack(port);
 
 		const ws = await connectWs(port);
 		wsClients.push(ws);
@@ -150,17 +252,7 @@ describe("Web mode integration", () => {
 
 	test("get_tools over WebSocket", async () => {
 		const port = await getPort();
-		const wsServer = createWebSocketServer();
-		const core = createProtocolServerCore({ session, output: (obj) => wsServer.broadcast(obj) });
-		await core.bind();
-
-		wsServer.onMessage(async (client, data) => {
-			const resp = await core.handleCommand(data as any);
-			client.send(resp);
-		});
-
-		httpHandle = createHttpServer({ host: "127.0.0.1", port, wsServer });
-		await httpHandle.listen();
+		await createStack(port);
 
 		const ws = await connectWs(port);
 		wsClients.push(ws);
@@ -175,17 +267,7 @@ describe("Web mode integration", () => {
 
 	test("set_thinking_level over WebSocket", async () => {
 		const port = await getPort();
-		const wsServer = createWebSocketServer();
-		const core = createProtocolServerCore({ session, output: (obj) => wsServer.broadcast(obj) });
-		await core.bind();
-
-		wsServer.onMessage(async (client, data) => {
-			const resp = await core.handleCommand(data as any);
-			client.send(resp);
-		});
-
-		httpHandle = createHttpServer({ host: "127.0.0.1", port, wsServer });
-		await httpHandle.listen();
+		await createStack(port);
 
 		const ws = await connectWs(port);
 		wsClients.push(ws);
@@ -201,17 +283,7 @@ describe("Web mode integration", () => {
 
 	test("multiple clients receive broadcasts", async () => {
 		const port = await getPort();
-		const wsServer = createWebSocketServer();
-		const core = createProtocolServerCore({ session, output: (obj) => wsServer.broadcast(obj) });
-		await core.bind();
-
-		wsServer.onMessage(async (client, data) => {
-			const resp = await core.handleCommand(data as any);
-			client.send(resp);
-		});
-
-		httpHandle = createHttpServer({ host: "127.0.0.1", port, wsServer });
-		await httpHandle.listen();
+		await createStack(port);
 
 		const ws1 = await connectWs(port);
 		const ws2 = await connectWs(port);
@@ -240,17 +312,7 @@ describe("Web mode integration", () => {
 
 	test("get_session_tree over WebSocket", async () => {
 		const port = await getPort();
-		const wsServer = createWebSocketServer();
-		const core = createProtocolServerCore({ session, output: (obj) => wsServer.broadcast(obj) });
-		await core.bind();
-
-		wsServer.onMessage(async (client, data) => {
-			const resp = await core.handleCommand(data as any);
-			client.send(resp);
-		});
-
-		httpHandle = createHttpServer({ host: "127.0.0.1", port, wsServer });
-		await httpHandle.listen();
+		await createStack(port);
 
 		const ws = await connectWs(port);
 		wsClients.push(ws);
@@ -266,17 +328,7 @@ describe("Web mode integration", () => {
 
 	test("get_context_usage over WebSocket", async () => {
 		const port = await getPort();
-		const wsServer = createWebSocketServer();
-		const core = createProtocolServerCore({ session, output: (obj) => wsServer.broadcast(obj) });
-		await core.bind();
-
-		wsServer.onMessage(async (client, data) => {
-			const resp = await core.handleCommand(data as any);
-			client.send(resp);
-		});
-
-		httpHandle = createHttpServer({ host: "127.0.0.1", port, wsServer });
-		await httpHandle.listen();
+		await createStack(port);
 
 		const ws = await connectWs(port);
 		wsClients.push(ws);
@@ -289,12 +341,7 @@ describe("Web mode integration", () => {
 
 	test("health endpoint works alongside WebSocket", async () => {
 		const port = await getPort();
-		const wsServer = createWebSocketServer();
-		const core = createProtocolServerCore({ session, output: (obj) => wsServer.broadcast(obj) });
-		await core.bind();
-
-		httpHandle = createHttpServer({ host: "127.0.0.1", port, wsServer });
-		await httpHandle.listen();
+		await createStack(port);
 
 		const resp = await fetch(`http://127.0.0.1:${port}/health`);
 		expect(resp.status).toBe(200);
