@@ -6683,6 +6683,23 @@ export const MODELS = {
 			contextWindow: 262144,
 			maxTokens: 32768,
 		} satisfies Model<"openai-completions">,
+		"bytedance-seed/seed-2.0-mini": {
+			id: "bytedance-seed/seed-2.0-mini",
+			name: "ByteDance Seed: Seed-2.0-Mini",
+			api: "openai-completions",
+			provider: "openrouter",
+			baseUrl: "https://openrouter.ai/api/v1",
+			reasoning: true,
+			input: ["text", "image"],
+			cost: {
+				input: 0.09999999999999999,
+				output: 0.39999999999999997,
+				cacheRead: 0,
+				cacheWrite: 0,
+			},
+			contextWindow: 262144,
+			maxTokens: 131072,
+		} satisfies Model<"openai-completions">,
 		"cohere/command-r-08-2024": {
 			id: "cohere/command-r-08-2024",
 			name: "Cohere: Command R (08-2024)",
@@ -9213,7 +9230,7 @@ export const MODELS = {
 				cacheRead: 0.049999999999999996,
 				cacheWrite: 0,
 			},
-			contextWindow: 32000,
+			contextWindow: 40960,
 			maxTokens: 8192,
 		} satisfies Model<"openai-completions">,
 		"qwen/qwen3-coder": {
