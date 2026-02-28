@@ -23,6 +23,10 @@ const queryClient = new QueryClient({
 	},
 });
 
+if ("serviceWorker" in navigator) {
+	navigator.serviceWorker.register("/sw.js");
+}
+
 createRoot(app).render(
 	<QueryClientProvider client={queryClient}>
 		<App />
