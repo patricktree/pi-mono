@@ -130,6 +130,20 @@ export class MessageController {
 			}
 		}
 
+		// Deduplicate A2UI surfaces: if the same surface_id was rendered multiple
+		// times, only keep the last occurrence (matches live streaming behavior).
+		const seenSurfaceIds = new Set<string>();
+		for (let i = uiMessages.length - 1; i >= 0; i--) {
+			const msg = uiMessages[i];
+			if (msg.kind === "a2ui" && msg.a2uiSurface) {
+				if (seenSurfaceIds.has(msg.a2uiSurface.surfaceId)) {
+					uiMessages.splice(i, 1);
+				} else {
+					seenSurfaceIds.add(msg.a2uiSurface.surfaceId);
+				}
+			}
+		}
+
 		this.resetActiveMessageIds();
 		return uiMessages;
 	}
@@ -407,7 +421,32 @@ export class MessageController {
 				const argsPreview = args.length > 200 ? `${args.slice(0, 200)}...` : args;
 				const message = this.createToolStepMessage(part.name, argsPreview);
 				toolStepMap.set(part.id, message);
-				return [message];
+
+				const result: UiMessage[] = [message];
+
+				// Reconstruct A2UI surfaces from render_ui tool calls so they
+				// survive page refresh (the live a2ui_surface_update events are
+				// not persisted in message history).
+				if (part.name === "render_ui" && part.arguments) {
+					const surfaceId = part.arguments.surface_id as string | undefined;
+					const a2uiMessages = part.arguments.messages as unknown[] | undefined;
+					if (surfaceId && Array.isArray(a2uiMessages)) {
+						this.nextMessageId += 1;
+						result.push({
+							id: `msg_${this.nextMessageId}`,
+							kind: "a2ui",
+							text: `[A2UI surface: ${surfaceId}]`,
+							a2uiSurface: {
+								surfaceId,
+								messages: a2uiMessages,
+								interactive: false,
+								revision: 0,
+							},
+						});
+					}
+				}
+
+				return result;
 			}
 		}
 	}

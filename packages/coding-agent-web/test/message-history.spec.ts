@@ -115,4 +115,182 @@ test.describe("message history", () => {
 
 		await expect(page).toHaveScreenshot("tool-call-error.png");
 	});
+
+	test("reconstructs A2UI surface from render_ui tool call in history", async ({ server, page }) => {
+		const a2uiMessages = [
+			{ createSurface: { surfaceId: "departures", catalogId: "standard" } },
+			{
+				updateComponents: {
+					surfaceId: "departures",
+					components: [
+						{ id: "root", component: "Column", children: ["title", "btn-row"] },
+						{ id: "title", component: "Text", text: { literalString: "Departure Board" }, usageHint: "h2" },
+						{ id: "btn-row", component: "Row", children: ["refresh-btn"] },
+						{
+							id: "refresh-btn",
+							component: "Button",
+							child: "refresh-text",
+							action: { event: { name: "refresh", context: {} } },
+						},
+						{ id: "refresh-text", component: "Text", text: { literalString: "Refresh" } },
+					],
+				},
+			},
+			{ updateDataModel: { surfaceId: "departures", value: {} } },
+		];
+
+		await setupApp(server, page, {
+			messages: [
+				{ role: "user", content: "Show departures", timestamp: Date.now() - 3000 },
+				{
+					role: "assistant",
+					content: [
+						{
+							type: "toolCall",
+							id: "tc_render",
+							name: "render_ui",
+							arguments: { surface_id: "departures", messages: a2uiMessages },
+						},
+					],
+					timestamp: Date.now() - 2000,
+				},
+				{
+					role: "toolResult",
+					toolCallId: "tc_render",
+					toolName: "render_ui",
+					content: [{ type: "text", text: "UI surface 'departures' rendered successfully." }],
+					isError: false,
+					timestamp: Date.now() - 1000,
+				},
+			],
+		});
+
+		// The A2UI surface should be rendered from history
+		await expect(page.getByText("Departure Board")).toBeVisible();
+		// Restored surfaces are read-only (non-interactive)
+		await expect(page.getByRole("button", { name: "Refresh" })).toBeDisabled();
+
+		await expect(page).toHaveScreenshot("a2ui-surface-from-history.png");
+	});
+
+	test("deduplicates A2UI surfaces with same surface_id in history", async ({ server, page }) => {
+		const makeA2uiMessages = (label: string) => [
+			{ createSurface: { surfaceId: "status", catalogId: "standard" } },
+			{
+				updateComponents: {
+					surfaceId: "status",
+					components: [
+						{ id: "root", component: "Column", children: ["label"] },
+						{ id: "label", component: "Text", text: { literalString: label } },
+					],
+				},
+			},
+			{ updateDataModel: { surfaceId: "status", value: {} } },
+		];
+
+		await setupApp(server, page, {
+			messages: [
+				{ role: "user", content: "Show status", timestamp: Date.now() - 5000 },
+				{
+					role: "assistant",
+					content: [
+						{
+							type: "toolCall",
+							id: "tc1",
+							name: "render_ui",
+							arguments: { surface_id: "status", messages: makeA2uiMessages("Version 1") },
+						},
+					],
+					timestamp: Date.now() - 4000,
+				},
+				{
+					role: "toolResult",
+					toolCallId: "tc1",
+					toolName: "render_ui",
+					content: [{ type: "text", text: "OK" }],
+					isError: false,
+					timestamp: Date.now() - 3500,
+				},
+				{ role: "user", content: "Update it", timestamp: Date.now() - 3000 },
+				{
+					role: "assistant",
+					content: [
+						{
+							type: "toolCall",
+							id: "tc2",
+							name: "render_ui",
+							arguments: { surface_id: "status", messages: makeA2uiMessages("Version 2") },
+						},
+					],
+					timestamp: Date.now() - 2000,
+				},
+				{
+					role: "toolResult",
+					toolCallId: "tc2",
+					toolName: "render_ui",
+					content: [{ type: "text", text: "OK" }],
+					isError: false,
+					timestamp: Date.now() - 1000,
+				},
+			],
+		});
+
+		// Only the latest version of the surface should be visible
+		await expect(page.getByText("Version 2")).toBeVisible();
+		await expect(page.getByText("Version 1")).not.toBeVisible();
+
+		await expect(page).toHaveScreenshot("a2ui-surface-deduplicated.png");
+	});
+
+	test("reconstructs A2UI surface with data-bound content from history", async ({ server, page }) => {
+		const a2uiMessages = [
+			{ createSurface: { surfaceId: "profile", catalogId: "standard" } },
+			{
+				updateComponents: {
+					surfaceId: "profile",
+					components: [
+						{ id: "root", component: "Column", children: ["name-text"] },
+						{ id: "name-text", component: "Text", text: { path: "/user/name" } },
+					],
+				},
+			},
+			{
+				updateDataModel: {
+					surfaceId: "profile",
+					value: { user: { name: "Alice" } },
+				},
+			},
+		];
+
+		await setupApp(server, page, {
+			messages: [
+				{ role: "user", content: "Show profile", timestamp: Date.now() - 3000 },
+				{
+					role: "assistant",
+					content: [
+						{
+							type: "toolCall",
+							id: "tc_profile",
+							name: "render_ui",
+							arguments: { surface_id: "profile", messages: a2uiMessages },
+						},
+					],
+					timestamp: Date.now() - 2000,
+				},
+				{
+					role: "toolResult",
+					toolCallId: "tc_profile",
+					toolName: "render_ui",
+					content: [{ type: "text", text: "OK" }],
+					isError: false,
+					timestamp: Date.now() - 1000,
+				},
+			],
+		});
+
+		// Data-bound text should resolve from the data model
+		await expect(page.getByText("Alice")).toBeVisible();
+
+		await expect(page).toHaveScreenshot("a2ui-data-bound-from-history.png");
+	});
 });
