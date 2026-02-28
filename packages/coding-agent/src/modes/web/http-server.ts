@@ -69,7 +69,7 @@ function getFallbackHtml(host: string, port: number): string {
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>pi web mode</title>
+<title>Pi Web</title>
 <style>
   html, body {
     height: 100%;
@@ -102,7 +102,7 @@ function getFallbackHtml(host: string, port: number): string {
 </head>
 <body>
 <main>
-  <h1>pi web mode</h1>
+  <h1>Pi Web</h1>
   <p>
     No external web UI bundle is configured. The production frontend now lives in
     <strong>packages/coding-agent-web</strong>.
