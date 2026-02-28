@@ -44,13 +44,8 @@ export function buildSurfaceState(messages: unknown[]): SurfaceState {
 	// that isn't referenced as a child by another component.
 	const childIds = new Set<string>();
 	for (const comp of components.values()) {
-		const children = resolveChildIds(comp);
-		for (const childId of children) {
+		for (const childId of resolveChildIds(comp)) {
 			childIds.add(childId);
-		}
-		const child = comp.child as string | undefined;
-		if (child) {
-			childIds.add(child);
 		}
 	}
 
@@ -69,11 +64,36 @@ export function buildSurfaceState(messages: unknown[]): SurfaceState {
 	return { components, rootId, dataModel };
 }
 
-/** Extract child IDs from a component's children property. */
+/** Extract child IDs from a component's children, child, and tabs properties. */
 function resolveChildIds(comp: A2uiComponentDef): string[] {
+	const ids: string[] = [];
+
+	// children (plural)
 	const children = comp.children as string[] | { explicitList?: string[] } | undefined;
-	if (!children) return [];
-	if (Array.isArray(children)) return children;
-	if (children.explicitList) return children.explicitList;
-	return [];
+	if (children) {
+		if (Array.isArray(children)) {
+			ids.push(...children);
+		} else if (children.explicitList) {
+			ids.push(...children.explicitList);
+		}
+	}
+
+	// child (singular)
+	const child = comp.child as string | undefined;
+	if (child) {
+		ids.push(child);
+	}
+
+	// Tabs / items — content IDs referenced by tab definitions
+	const tabs = (comp.tabs ?? comp.items) as Array<Record<string, unknown>> | undefined;
+	if (Array.isArray(tabs)) {
+		for (const tab of tabs) {
+			const contentId = (tab.contentId ?? tab.content ?? tab.child ?? tab.panelId ?? tab.componentId) as
+				| string
+				| undefined;
+			if (contentId) ids.push(contentId);
+		}
+	}
+
+	return ids;
 }

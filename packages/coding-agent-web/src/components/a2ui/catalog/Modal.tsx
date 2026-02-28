@@ -1,5 +1,5 @@
 import { css } from "@linaria/core";
-import { RenderChild } from "../children.js";
+import { useRenderChildren } from "../children.js";
 import type { A2uiComponentDef } from "../types.js";
 
 const modalOverlay = css`
@@ -24,12 +24,12 @@ const modalContent = css`
 `;
 
 export function A2uiModal({ def }: { def: A2uiComponentDef }) {
-	const childId = def.child as string | undefined;
+	const children = useRenderChildren(def);
 
 	return (
 		<div className={modalOverlay}>
 			<div className={modalContent}>
-				<RenderChild childId={childId} />
+				{children}
 			</div>
 		</div>
 	);

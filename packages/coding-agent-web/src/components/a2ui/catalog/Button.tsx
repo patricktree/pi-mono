@@ -1,8 +1,9 @@
 import { css } from "@linaria/core";
 import { useCallback } from "react";
 import { useA2ui } from "../A2uiContext.js";
-import { RenderChild } from "../children.js";
-import type { A2uiAction, A2uiComponentDef } from "../types.js";
+import { useRenderChildren } from "../children.js";
+import { resolveString } from "../useDataBinding.js";
+import type { A2uiAction, A2uiComponentDef, A2uiStringValue } from "../types.js";
 
 const buttonStyle = css`
 	display: inline-flex;
@@ -33,9 +34,11 @@ const buttonStyle = css`
 `;
 
 export function A2uiButton({ def }: { def: A2uiComponentDef }) {
-	const { interactive, onAction } = useA2ui();
+	const { interactive, onAction, dataModel, dataBasePath } = useA2ui();
 	const action = def.action as A2uiAction | undefined;
-	const childId = def.child as string | undefined;
+	const children = useRenderChildren(def);
+	// Support inline label text (LLMs may skip the child Text component)
+	const label = resolveString(def.label as A2uiStringValue | string | undefined, dataModel, dataBasePath);
 
 	const handleClick = useCallback(() => {
 		if (!interactive || !action) return;
@@ -44,7 +47,7 @@ export function A2uiButton({ def }: { def: A2uiComponentDef }) {
 
 	return (
 		<button type="button" className={buttonStyle} disabled={!interactive} onClick={handleClick}>
-			<RenderChild childId={childId} />
+			{children.length > 0 ? children : label || null}
 		</button>
 	);
 }

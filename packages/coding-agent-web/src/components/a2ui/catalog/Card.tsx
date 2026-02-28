@@ -1,5 +1,5 @@
 import { css } from "@linaria/core";
-import { RenderChild } from "../children.js";
+import { useRenderChildren } from "../children.js";
 import type { A2uiComponentDef } from "../types.js";
 
 const cardStyle = css`
@@ -11,10 +11,6 @@ const cardStyle = css`
 `;
 
 export function A2uiCard({ def }: { def: A2uiComponentDef }) {
-	const childId = def.child as string | undefined;
-	return (
-		<div className={cardStyle}>
-			<RenderChild childId={childId} />
-		</div>
-	);
+	const children = useRenderChildren(def);
+	return <div className={cardStyle}>{children}</div>;
 }

@@ -358,23 +358,11 @@ export class MessageController {
 	}
 
 	private applyA2uiSurfaceUpdate(messages: UiMessage[], event: A2uiSurfaceUpdateEvent): UiMessage[] {
-		const existing = messages.find((m) => m.kind === "a2ui" && m.a2uiSurface?.surfaceId === event.surfaceId);
-		if (existing?.a2uiSurface) {
-			// Append new messages to existing surface and bump revision
-			return messages.map((m) =>
-				m.id === existing.id && m.a2uiSurface
-					? {
-							...m,
-							a2uiSurface: {
-								...m.a2uiSurface,
-								messages: [...m.a2uiSurface.messages, ...event.messages],
-								revision: m.a2uiSurface.revision + 1,
-							},
-						}
-					: m,
-			);
-		}
-		// Create a new a2ui message
+		// Remove any existing surface with the same ID so it re-appears at the
+		// current position with fresh messages (each render_ui call provides a
+		// complete surface definition).
+		const filtered = messages.filter((m) => !(m.kind === "a2ui" && m.a2uiSurface?.surfaceId === event.surfaceId));
+
 		this.nextMessageId += 1;
 		const message: UiMessage = {
 			id: `msg_${this.nextMessageId}`,
@@ -387,7 +375,7 @@ export class MessageController {
 				revision: 0,
 			},
 		};
-		return [...messages, message];
+		return [...filtered, message];
 	}
 
 	private applyA2uiSurfaceComplete(messages: UiMessage[], event: A2uiSurfaceCompleteEvent): UiMessage[] {
