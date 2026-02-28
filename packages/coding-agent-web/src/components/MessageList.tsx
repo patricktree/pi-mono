@@ -1,6 +1,8 @@
 import { css } from "@linaria/core";
 import type { UiMessage } from "../state/store.js";
 import type { Turn } from "../utils/helpers.js";
+import { A2uiSurface } from "./a2ui/A2uiSurface.js";
+import type { A2uiAction } from "./a2ui/types.js";
 import { EmptyState } from "./EmptyState.js";
 import { Markdown } from "./Markdown.js";
 import { renderStep } from "./ToolStep.js";
@@ -48,6 +50,7 @@ export function MessageList({
 	expandedTools,
 	setExpandedTools,
 	cwd,
+	onA2uiAction,
 }: {
 	orphans: UiMessage[];
 	turns: Turn[];
@@ -56,6 +59,7 @@ export function MessageList({
 	expandedTools: Set<string>;
 	setExpandedTools: React.Dispatch<React.SetStateAction<Set<string>>>;
 	cwd: string | undefined;
+	onA2uiAction: (surfaceId: string, action: A2uiAction) => void;
 }) {
 	const hasContent = orphans.length > 0 || turns.length > 0;
 
@@ -67,7 +71,11 @@ export function MessageList({
 				<>
 					{orphans.map((message) => (
 						<div className={orphanWrap} key={message.id}>
-							{renderStep(message, expandedTools, setExpandedTools)}
+							{message.kind === "a2ui" && message.a2uiSurface ? (
+								<A2uiSurface data={message.a2uiSurface} onAction={onA2uiAction} />
+							) : (
+								renderStep(message, expandedTools, setExpandedTools)
+							)}
 						</div>
 					))}
 
@@ -102,6 +110,13 @@ export function MessageList({
 									}
 									if (message.kind === "thinking") {
 										return null;
+									}
+									if (message.kind === "a2ui" && message.a2uiSurface) {
+										return (
+											<div key={message.id}>
+												<A2uiSurface data={message.a2uiSurface} onAction={onA2uiAction} />
+											</div>
+										);
 									}
 									return (
 										<div key={message.id}>

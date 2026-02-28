@@ -1499,6 +1499,199 @@ const toolErrorScenario: Scenario = {
 };
 
 // ---------------------------------------------------------------------------
+// A2UI scenario: agent renders an interactive UI surface
+// ---------------------------------------------------------------------------
+
+const A2UI_TEXT = "Here are the test results. You can select which tests to fix:";
+
+const A2UI_ANSWER = "I'll fix the selected tests now.";
+
+const a2uiScenario: Scenario = {
+	autoPrompt: "Show me the failing tests",
+	preload: [],
+	steps: [
+		{ delay: 100, event: { type: "agent_start" } },
+		// Text before UI
+		{
+			delay: 50,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: { type: "text_start" },
+			},
+		},
+		...textDeltas(A2UI_TEXT, 8, 20),
+		{
+			delay: 20,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: { type: "text_end", content: A2UI_TEXT },
+			},
+		},
+		// Tool call: render_ui
+		{
+			delay: 50,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: { type: "toolcall_start" },
+			},
+		},
+		{
+			delay: 80,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: {
+					type: "toolcall_end",
+					toolCall: {
+						type: "toolCall",
+						id: "tc_a2ui",
+						name: "render_ui",
+						arguments: { surface_id: "test-results", messages: [] },
+					},
+				},
+			},
+		},
+		{
+			delay: 50,
+			event: {
+				type: "message_end",
+				message: {
+					role: "assistant",
+					content: [
+						{ type: "text", text: A2UI_TEXT },
+						{
+							type: "toolCall",
+							id: "tc_a2ui",
+							name: "render_ui",
+							arguments: { surface_id: "test-results", messages: [] },
+						},
+					],
+					timestamp: Date.now(),
+				},
+			},
+		},
+		{ delay: 50, event: { type: "tool_execution_start", toolName: "render_ui" } },
+		// A2UI surface update event
+		{
+			delay: 100,
+			event: {
+				type: "a2ui_surface_update",
+				surfaceId: "test-results",
+				messages: [
+					{ createSurface: { surfaceId: "test-results", catalogId: "standard" } },
+					{
+						updateComponents: {
+							surfaceId: "test-results",
+							components: [
+								{ id: "root", component: "Column", children: ["header", "divider", "test-list", "actions"] },
+								{ id: "header", component: "Text", text: { literalString: "Test Results" }, usageHint: "h2" },
+								{ id: "divider", component: "Divider" },
+								{
+									id: "test-list",
+									component: "Column",
+									children: ["test-1", "test-2", "test-3"],
+								},
+								{
+									id: "test-1",
+									component: "CheckBox",
+									label: { literalString: "auth.test.ts — FAIL: expected token to be valid" },
+									value: { path: "/tests/0/selected" },
+								},
+								{
+									id: "test-2",
+									component: "CheckBox",
+									label: { literalString: "api.test.ts — FAIL: expected status 200, got 401" },
+									value: { path: "/tests/1/selected" },
+								},
+								{
+									id: "test-3",
+									component: "CheckBox",
+									label: { literalString: "utils.test.ts — PASS" },
+									value: { path: "/tests/2/selected" },
+								},
+								{
+									id: "actions",
+									component: "Row",
+									children: ["fix-btn", "skip-btn"],
+								},
+								{
+									id: "fix-btn",
+									component: "Button",
+									child: "fix-text",
+									action: { event: { name: "fix_tests", context: {} } },
+								},
+								{ id: "fix-text", component: "Text", text: { literalString: "Fix Selected" } },
+								{
+									id: "skip-btn",
+									component: "Button",
+									child: "skip-text",
+									action: { event: { name: "skip", context: {} } },
+								},
+								{ id: "skip-text", component: "Text", text: { literalString: "Skip" } },
+							],
+						},
+					},
+					{
+						updateDataModel: {
+							surfaceId: "test-results",
+							value: {
+								tests: [
+									{ name: "auth.test.ts", selected: true },
+									{ name: "api.test.ts", selected: true },
+									{ name: "utils.test.ts", selected: false },
+								],
+							},
+						},
+					},
+				],
+			},
+		},
+		{
+			delay: 200,
+			event: {
+				type: "tool_execution_end",
+				toolName: "render_ui",
+				result: { content: [{ type: "text", text: "UI surface 'test-results' rendered successfully." }] },
+				isError: false,
+			},
+		},
+		// Follow-up text
+		{
+			delay: 100,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: { type: "text_start" },
+			},
+		},
+		...textDeltas(A2UI_ANSWER, 8, 25),
+		{
+			delay: 20,
+			event: {
+				type: "message_update",
+				message: MSG_STUB,
+				assistantMessageEvent: { type: "text_end", content: A2UI_ANSWER },
+			},
+		},
+		{
+			delay: 50,
+			event: {
+				type: "message_end",
+				message: {
+					role: "assistant",
+					content: [{ type: "text", text: A2UI_ANSWER }],
+					timestamp: Date.now(),
+				},
+			},
+		},
+		{ delay: 50, event: { type: "agent_end" } },
+	],
+};
+
+// ---------------------------------------------------------------------------
 // Registry
 // ---------------------------------------------------------------------------
 
@@ -1513,4 +1706,5 @@ export const SCENARIOS: Record<string, Scenario> = {
 	thinking: thinkingScenario,
 	steering: steeringScenario,
 	"tool-error": toolErrorScenario,
+	a2ui: a2uiScenario,
 };

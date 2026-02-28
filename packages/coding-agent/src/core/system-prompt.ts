@@ -14,6 +14,7 @@ const toolDescriptions: Record<string, string> = {
 	grep: "Search file contents for patterns (respects .gitignore)",
 	find: "Find files by glob pattern (respects .gitignore)",
 	ls: "List directory contents",
+	render_ui: "Render interactive UI surfaces in the user's browser (forms, cards, lists, buttons)",
 };
 
 export interface BuildSystemPromptOptions {

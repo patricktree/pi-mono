@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
 import type { AgentSession } from "../../core/agent-session.js";
 import { SessionManager } from "../../core/session-manager.js";
+import { createRenderUiTool } from "../../core/tools/render-ui.js";
 import { createExtensionUIBridge } from "../protocol/extension-ui-bridge.js";
 import type { RpcExtensionUIResponse } from "../protocol/types.js";
 import { createHttpServer } from "./http-server.js";
@@ -84,9 +85,22 @@ export async function runWebMode(session: AgentSession, options: WebModeOptions)
 		wsServer.broadcast(obj);
 	};
 
+	// Register render_ui tool for A2UI generative interfaces
+	const activeSurfaceIds = new Set<string>();
+	const renderUiTool = createRenderUiTool(broadcast, activeSurfaceIds);
+	session.addAgentTool(renderUiTool);
+
 	// Subscribe to all session events and broadcast them
 	session.subscribe((event) => {
 		broadcast(event);
+
+		// When agent turn ends, mark all active A2UI surfaces as read-only
+		if (event.type === "agent_end") {
+			for (const surfaceId of activeSurfaceIds) {
+				broadcast({ type: "a2ui_surface_complete", surfaceId });
+			}
+			activeSurfaceIds.clear();
+		}
 	});
 
 	// Extension UI bridge — serialises extension dialogs over WebSocket
@@ -534,6 +548,22 @@ async function handleCommand(
 					}));
 
 				return successResponse(id, "list_directory", { absolutePath, entries });
+			}
+
+			// ==== A2UI ====
+
+			case "a2ui_action": {
+				const actionName = command.actionName as string;
+				const surfaceId = command.surfaceId as string;
+				const context = command.context as Record<string, unknown>;
+				const contextStr = JSON.stringify(context, null, 2);
+				session
+					.prompt(
+						`User interacted with UI surface "${surfaceId}": action="${actionName}", context=${contextStr}`,
+						{ source: "rpc" },
+					)
+					.catch((e) => broadcast(errorResponse(undefined, "a2ui_action", (e as Error).message)));
+				return successResponse(id, "a2ui_action");
 			}
 
 			default: {

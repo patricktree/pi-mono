@@ -112,6 +112,7 @@ export interface RpcResponseDataMap {
 	bash: BashResult;
 	abort_bash: undefined;
 	list_directory: { absolutePath: string; entries: DirectoryEntry[] };
+	a2ui_action: undefined;
 }
 
 /** Per-command success variants: includes `data` only for commands that carry data. */
@@ -222,6 +223,21 @@ export interface ExtensionErrorEvent {
 	error: string;
 }
 
+// ---------------------------------------------------------------------------
+// A2UI events
+// ---------------------------------------------------------------------------
+
+export interface A2uiSurfaceUpdateEvent {
+	type: "a2ui_surface_update";
+	surfaceId: string;
+	messages: unknown[];
+}
+
+export interface A2uiSurfaceCompleteEvent {
+	type: "a2ui_surface_complete";
+	surfaceId: string;
+}
+
 export type ServerEvent =
 	| RpcResponse
 	| AgentStartEvent
@@ -233,7 +249,9 @@ export type ServerEvent =
 	| ToolExecutionEndEvent
 	| SessionChangedEvent
 	| ExtensionUiRequestEvent
-	| ExtensionErrorEvent;
+	| ExtensionErrorEvent
+	| A2uiSurfaceUpdateEvent
+	| A2uiSurfaceCompleteEvent;
 
 export interface PromptCommand {
 	id?: string;
@@ -309,6 +327,14 @@ export interface ListDirectoryCommand {
 	path: string;
 }
 
+export interface A2uiActionCommand {
+	id?: string;
+	type: "a2ui_action";
+	surfaceId: string;
+	actionName: string;
+	context: Record<string, unknown>;
+}
+
 export interface BashResult {
 	output: string;
 	exitCode: number | undefined;
@@ -330,7 +356,8 @@ export type ClientCommand =
 	| SetThinkingLevelCommand
 	| BashCommand
 	| AbortBashCommand
-	| ListDirectoryCommand;
+	| ListDirectoryCommand
+	| A2uiActionCommand;
 
 export type ExtensionUiResponse =
 	| { type: "extension_ui_response"; id: string; cancelled: true }

@@ -150,4 +150,16 @@ export class ProtocolClient {
 	sendExtensionUiResponse(response: ExtensionUiResponse): void {
 		this.transport.sendExtensionUiResponse(response);
 	}
+
+	async sendA2uiAction(surfaceId: string, actionName: string, context: Record<string, unknown>): Promise<void> {
+		const response = await this.typedRequest({
+			type: "a2ui_action" as const,
+			surfaceId,
+			actionName,
+			context,
+		});
+		if (!response.success) {
+			throw new Error(response.error);
+		}
+	}
 }

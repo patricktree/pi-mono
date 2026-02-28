@@ -1,5 +1,7 @@
 import { create } from "zustand";
 import type {
+	A2uiSurfaceCompleteEvent,
+	A2uiSurfaceUpdateEvent,
 	AssistantContent,
 	ExtensionErrorEvent,
 	ExtensionUiRequestEvent,
@@ -12,7 +14,7 @@ import type {
 	ToolExecutionStartEvent,
 } from "../protocol/types.js";
 
-export type UiMessageKind = "user" | "assistant" | "thinking" | "tool" | "error" | "system" | "bash";
+export type UiMessageKind = "user" | "assistant" | "thinking" | "tool" | "error" | "system" | "bash" | "a2ui";
 
 export type ToolStepPhase = "calling" | "running" | "done" | "error";
 
@@ -30,6 +32,16 @@ export interface BashResultData {
 	exitCode: number | undefined;
 }
 
+export interface A2uiSurfaceData {
+	surfaceId: string;
+	/** Accumulated A2UI v0.9 messages (grows with streaming). */
+	messages: unknown[];
+	/** Whether the surface is still interactive (false after turn ends). */
+	interactive: boolean;
+	/** Revision counter to trigger React re-renders on message appends. */
+	revision: number;
+}
+
 export interface UiMessage {
 	id: string;
 	kind: UiMessageKind;
@@ -40,6 +52,8 @@ export interface UiMessage {
 	bashResult?: BashResultData;
 	/** Attached images, present on user messages with image attachments. */
 	images?: ImageContent[];
+	/** Present only when kind === "a2ui". */
+	a2uiSurface?: A2uiSurfaceData;
 }
 
 export type AppInputMode = "prompt" | "shell";
@@ -168,6 +182,14 @@ export class MessageController {
 
 			case "extension_error": {
 				return this.applyExtensionError(messages, event);
+			}
+
+			case "a2ui_surface_update": {
+				return this.applyA2uiSurfaceUpdate(messages, event);
+			}
+
+			case "a2ui_surface_complete": {
+				return this.applyA2uiSurfaceComplete(messages, event);
 			}
 
 			default:
@@ -333,6 +355,53 @@ export class MessageController {
 
 	private applyExtensionError(messages: UiMessage[], event: ExtensionErrorEvent): UiMessage[] {
 		return this.pushMessage(messages, "error", `Extension error: ${event.error}`);
+	}
+
+	private applyA2uiSurfaceUpdate(messages: UiMessage[], event: A2uiSurfaceUpdateEvent): UiMessage[] {
+		const existing = messages.find((m) => m.kind === "a2ui" && m.a2uiSurface?.surfaceId === event.surfaceId);
+		if (existing?.a2uiSurface) {
+			// Append new messages to existing surface and bump revision
+			return messages.map((m) =>
+				m.id === existing.id && m.a2uiSurface
+					? {
+							...m,
+							a2uiSurface: {
+								...m.a2uiSurface,
+								messages: [...m.a2uiSurface.messages, ...event.messages],
+								revision: m.a2uiSurface.revision + 1,
+							},
+						}
+					: m,
+			);
+		}
+		// Create a new a2ui message
+		this.nextMessageId += 1;
+		const message: UiMessage = {
+			id: `msg_${this.nextMessageId}`,
+			kind: "a2ui",
+			text: `[A2UI surface: ${event.surfaceId}]`,
+			a2uiSurface: {
+				surfaceId: event.surfaceId,
+				messages: [...event.messages],
+				interactive: true,
+				revision: 0,
+			},
+		};
+		return [...messages, message];
+	}
+
+	private applyA2uiSurfaceComplete(messages: UiMessage[], event: A2uiSurfaceCompleteEvent): UiMessage[] {
+		return messages.map((m) =>
+			m.kind === "a2ui" && m.a2uiSurface?.surfaceId === event.surfaceId
+				? {
+						...m,
+						a2uiSurface: {
+							...m.a2uiSurface,
+							interactive: false,
+						},
+					}
+				: m,
+		);
 	}
 
 	private convertAssistantPart(part: AssistantContent, toolStepMap: Map<string, UiMessage>): UiMessage[] {

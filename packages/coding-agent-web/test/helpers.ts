@@ -1,5 +1,7 @@
 import type { Page } from "@playwright/test";
 import type {
+	A2uiSurfaceCompleteEvent,
+	A2uiSurfaceUpdateEvent,
 	AgentEndEvent,
 	AgentStartEvent,
 	AssistantMessage,
@@ -208,4 +210,12 @@ export function messageStart(content: string): ServerEvent {
 		type: "message_start",
 		message: { role: "user", content, timestamp: Date.now() },
 	};
+}
+
+export function a2uiSurfaceUpdate(surfaceId: string, messages: unknown[]): A2uiSurfaceUpdateEvent {
+	return { type: "a2ui_surface_update", surfaceId, messages };
+}
+
+export function a2uiSurfaceComplete(surfaceId: string): A2uiSurfaceCompleteEvent {
+	return { type: "a2ui_surface_complete", surfaceId };
 }

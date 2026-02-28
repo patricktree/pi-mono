@@ -48,6 +48,7 @@ export {
 	type ReadToolOptions,
 	readTool,
 } from "./read.js";
+export { type BroadcastFn, createRenderUiTool, type RenderUiToolInput } from "./render-ui.js";
 export {
 	DEFAULT_MAX_BYTES,
 	DEFAULT_MAX_LINES,

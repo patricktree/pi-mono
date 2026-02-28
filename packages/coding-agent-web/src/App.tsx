@@ -6,6 +6,7 @@ import { BottomToolbar } from "./components/BottomToolbar.js";
 import { DirectoryPicker } from "./components/DirectoryPicker.js";
 import { Header } from "./components/Header.js";
 import { MessageList } from "./components/MessageList.js";
+import type { A2uiAction } from "./components/a2ui/types.js";
 import { PromptInput } from "./components/PromptInput.js";
 import { ScheduledMessages } from "./components/ScheduledMessages.js";
 import { SessionTitleBar } from "./components/SessionTitleBar.js";
@@ -565,6 +566,26 @@ export function App() {
 		}
 	}, [appendErrorMessage, connected]);
 
+	const handleA2uiAction = useCallback(
+		async (surfaceId: string, action: A2uiAction) => {
+			const protocolClient = protocolRef.current;
+			if (!protocolClient || !connected) {
+				return;
+			}
+
+			const event = action.event;
+			if (!event) return;
+
+			try {
+				await protocolClient.sendA2uiAction(surfaceId, event.name, event.context ?? {});
+			} catch (actionError) {
+				const messageText = actionError instanceof Error ? actionError.message : String(actionError);
+				appendErrorMessage(`A2UI action error: ${messageText}`);
+			}
+		},
+		[appendErrorMessage, connected],
+	);
+
 	const onNewSession = useCallback(() => {
 		setSidebarOpen(false);
 		setDirectoryPickerOpen(true);
@@ -700,6 +721,7 @@ export function App() {
 					expandedTools={expandedTools}
 					setExpandedTools={setExpandedTools}
 					cwd={currentSession?.cwd}
+					onA2uiAction={handleA2uiAction}
 				/>
 			</div>
 

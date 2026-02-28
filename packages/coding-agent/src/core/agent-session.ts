@@ -262,6 +262,9 @@ export class AgentSession {
 	private _extensionErrorListener?: ExtensionErrorListener;
 	private _extensionErrorUnsubscriber?: () => void;
 
+	// Runtime agent tools registered after construction (e.g. web-mode render_ui)
+	private _runtimeAgentTools: AgentTool[] = [];
+
 	// Model registry for API key resolution
 	private _modelRegistry: ModelRegistry;
 
@@ -619,6 +622,18 @@ export class AgentSession {
 		// Rebuild base system prompt with new tool set
 		this._baseSystemPrompt = this._rebuildSystemPrompt(validToolNames);
 		this.agent.setSystemPrompt(this._baseSystemPrompt);
+	}
+
+	/**
+	 * Register an additional AgentTool at runtime.
+	 * The tool is added to the tool registry, activated immediately,
+	 * and persists across reload/rebuild cycles.
+	 */
+	addAgentTool(tool: AgentTool): void {
+		this._runtimeAgentTools.push(tool);
+		this._toolRegistry.set(tool.name, tool);
+		const currentTools = this.agent.state.tools;
+		this.agent.setTools([...currentTools, tool]);
 	}
 
 	/** Whether auto-compaction is currently running */
@@ -2040,12 +2055,22 @@ export class AgentSession {
 			}
 		}
 
+		// Include runtime agent tools (e.g. render_ui from web mode)
+		for (const tool of this._runtimeAgentTools) {
+			toolRegistry.set(tool.name, tool);
+			activeToolNameSet.add(tool.name);
+		}
+
 		const extensionToolNames = new Set(wrappedExtensionTools.map((tool) => tool.name));
+		const runtimeToolNames = new Set(this._runtimeAgentTools.map((tool) => tool.name));
 		const activeBaseTools = Array.from(activeToolNameSet)
-			.filter((name) => this._baseToolRegistry.has(name) && !extensionToolNames.has(name))
+			.filter(
+				(name) => this._baseToolRegistry.has(name) && !extensionToolNames.has(name) && !runtimeToolNames.has(name),
+			)
 			.map((name) => this._baseToolRegistry.get(name) as AgentTool);
 		const activeExtensionTools = wrappedExtensionTools.filter((tool) => activeToolNameSet.has(tool.name));
-		const activeToolsArray: AgentTool[] = [...activeBaseTools, ...activeExtensionTools];
+		const activeRuntimeTools = this._runtimeAgentTools.filter((tool) => activeToolNameSet.has(tool.name));
+		const activeToolsArray: AgentTool[] = [...activeBaseTools, ...activeExtensionTools, ...activeRuntimeTools];
 
 		if (this._extensionRunner) {
 			const wrappedActiveTools = wrapToolsWithExtensions(activeToolsArray, this._extensionRunner);
