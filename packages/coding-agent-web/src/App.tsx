@@ -13,7 +13,7 @@ import { Sidebar } from "./components/Sidebar.js";
 import { createScenarioTransport } from "./mock/create-scenario-transport.js";
 import { SCENARIOS } from "./mock/scenarios.js";
 import { ProtocolClient } from "./protocol/client.js";
-import type { ExtensionUiRequestEvent, MessageStartEvent, SessionSummary, ThinkingLevel } from "./protocol/types.js";
+import type { ContextUsage, ExtensionUiRequestEvent, MessageStartEvent, SessionSummary, ThinkingLevel } from "./protocol/types.js";
 import { MessageController, type UiMessage, useAppStore } from "./state/store.js";
 import { globalStyles } from "./styles/globalStyles.js";
 import type { Transport } from "./transport/transport.js";
@@ -163,7 +163,7 @@ export function App() {
 		},
 	});
 
-	useQuery({
+	const contextUsageQuery = useQuery<ContextUsage | undefined>({
 		queryKey: contextQueryKey,
 		enabled: connected && currentSessionId !== null,
 		queryFn: () => getProtocolClient().getContextUsage(),
@@ -683,7 +683,13 @@ export function App() {
 				onOpenSidebar={() => setSidebarOpen(true)}
 			/>
 
-			{hasContent && sessionTitle ? <SessionTitleBar title={sessionTitle} /> : null}
+			{hasContent && sessionTitle ? (
+				<SessionTitleBar
+					title={sessionTitle}
+					contextUsage={contextUsageQuery.data ?? undefined}
+					streaming={streaming}
+				/>
+			) : null}
 
 			<div className={mainScroller} ref={scrollerRef}>
 				<MessageList
